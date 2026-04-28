@@ -11,6 +11,10 @@ A collection of agent skills for developer productivity.
 | `dev-resource-query` | Retrieve saved resources from the Developer Brain Resources database | `notion` |
 | `dev-snippets-query` | Retrieve saved code snippets from the Developer Brain Snippets database | `notion` |
 | `dev-update-note` | Create or amend Developer Brain Notes with preview and confirmation | `notion` |
+| `jira-standup-draft` | Draft concise standup updates from Jira activity | `jira_mcp_readonly` |
+| `jira-ticket-brief` | Build an actionable checklist from a Jira ticket | `jira_mcp_readonly` |
+| `jira-work-queue` | Summarize and prioritize a Jira work queue | `jira_mcp_readonly` |
+| `update-branch` | Merge `origin/main` into the current branch with `git merge --no-ff` | — |
 | `vscode-add-keybinding` | Add a keybinding to the user's VSCode `keybindings.json` for their current OS | — |
 
 ## References
