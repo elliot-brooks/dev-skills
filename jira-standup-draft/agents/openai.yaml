@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jira Standup Draft"
+  short_description: "Draft standup updates from Jira activity"
+  default_prompt: "Use $jira-standup-draft to turn recent Jira activity into a concise standup update."
