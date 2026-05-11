@@ -1,0 +1,4 @@
+interface:
+  display_name: "Notion Find Page"
+  short_description: "Find a matching Notion page or database"
+  default_prompt: "Use $notion-find-page to find the most relevant Notion page or database for this request."

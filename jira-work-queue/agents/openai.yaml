@@ -1,4 +1,0 @@
-interface:
-  display_name: "Jira Work Queue"
-  short_description: "Summarize and prioritize a Jira work queue"
-  default_prompt: "Use $jira-work-queue to summarize my Jira work queue and suggest the next actions."

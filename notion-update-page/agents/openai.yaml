@@ -1,0 +1,4 @@
+interface:
+  display_name: "Notion Update Page"
+  short_description: "Safely update an existing Notion page"
+  default_prompt: "Use $notion-update-page to draft and apply a confirmed update to this Notion page."
