@@ -1,4 +1,0 @@
-interface:
-  display_name: "Jira Ticket Brief"
-  short_description: "Turn a Jira ticket into a checklist"
-  default_prompt: "Use $jira-ticket-brief to turn Jira ticket APX-123 into an actionable checklist."
