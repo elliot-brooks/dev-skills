@@ -1,6 +1,6 @@
-# dev-agent-skills
+# agentic-workflows
 
-A collection of agent skills for developer productivity.
+A collection of agentic workflows such as skills / agents to aid development
 
 ## Skills
 
@@ -21,6 +21,7 @@ A collection of agent skills for developer productivity.
 | `update-branch` | Merge `origin/main` into the current branch with `git merge --no-ff` | — |
 | `vscode-add-keybinding` | Add a keybinding to the user's VSCode `keybindings.json` for their current OS | — |
 
-## References
+## Useful Resources
 
-- [Developer Brain](https://www.notion.so/Developer-Brain-257e51091aba8266b7f581339c941adb) — Notion workspace used by the `dev-*` skills
+- [Production Grade Engineering Skills](https://github.com/addyosmani/agent-skills#)
+- [OpenAi Codex Docs](https://developers.openai.com/codex/skills)
