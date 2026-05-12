@@ -65,9 +65,9 @@ when the requested fields are in page content rather than properties.
 Return a compact result list with:
 
 - page title;
-- URL or id;
+- URL or ID;
 - the key properties relevant to the request;
-- a short note about filters/sorts used when useful.
+- Any information from the page content that the user requested and that is not in properties.
 
 If no rows match, say so and include the database title plus the effective
 filters. Do not perform writes.

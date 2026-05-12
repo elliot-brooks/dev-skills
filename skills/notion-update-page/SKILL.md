@@ -67,7 +67,7 @@ Choose the least surprising edit mode:
 
 Before writing, show a preview with:
 
-**Page:** `<page title> (edited)`
+**Page:** `<page title> (edited/created)`
 
 **Target location:** `<append|heading|section|property>`
 
@@ -100,7 +100,7 @@ After confirmation:
 
 After a confirmed write succeeds, return:
 
-**Page:** `<page title> (edited)`
+**Page:** `<page title> (edited/created)`
 
 **URL / id:** `<Notion URL or id>`
 
