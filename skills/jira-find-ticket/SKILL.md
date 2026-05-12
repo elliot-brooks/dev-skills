@@ -68,13 +68,13 @@ Use this structure unless the user requests another format:
 ```markdown
 # <Prompt-specific heading>
 
-- High: [<JIRA-KEY>](https://jira.arm.com/browse/<JIRA-KEY>)
+- High: [<JIRA-KEY>](https://jira.example.com/browse/<JIRA-KEY>)
   - Type: <issue type>
   - Summary: <summary>
   - Status: <status>
   - Priority: <priority>
 
-- Medium: [<JIRA-KEY>](https://jira.arm.com/browse/<JIRA-KEY>)
+- Medium: [<JIRA-KEY>](https://jira.example.com/browse/<JIRA-KEY>)
   - Type: <issue type>
   - Summary: <summary>
   - Status: <status>
