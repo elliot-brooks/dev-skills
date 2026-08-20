@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Create an implementation-ready Markdown plan grounded in the current codebase. Use when the user asks for a coding plan, implementation plan, task breakdown, migration plan, or a plan before making changes. Do not use when the user wants immediate implementation and a separate planning deliverable would add no value.
+description: Create a standalone implementation-ready Markdown plan artifact grounded in the current codebase. Use when the user asks for a coding plan, implementation plan, task breakdown, migration plan, or a plan before making changes. Do not use when the user wants immediate implementation and a separate planning deliverable would add no value.
 ---
 
 # Plan
@@ -11,7 +11,7 @@ Turn a development request into a plan another engineer or agent can execute wit
 
 Inspect the repository before planning. Read applicable agent instructions, relevant code, tests, configuration, documentation, and current version-control state. Trace existing behavior far enough to identify the real integration points and conventions.
 
-Treat the task as read-only unless the user also asks for implementation. Do not create placeholder files or make speculative edits while planning.
+Treat product code as read-only unless the user also asks for implementation. Creating the requested plan artifact is allowed. Do not create placeholder files or make speculative edits while planning.
 
 Resolve questions from available evidence first. Ask the user only about decisions that materially change the scope or design and cannot be inferred safely. State any remaining assumptions explicitly.
 
@@ -30,8 +30,16 @@ Explain why each step is needed and how it connects to adjacent work. Prefer coh
 
 Scale the detail to the change. A small fix may need only a few steps. A cross-cutting change should expose sequencing, ownership boundaries, and validation gates.
 
+## Create the Markdown artifact
+
+Always create one standalone `.md` file containing the complete plan. Do not provide the plan only as a chat response.
+
+Use the user's requested path when provided. Otherwise, create a descriptively named `<task>-plan.md` file in the repository root, or in the current workspace when there is no repository. Do not overwrite an existing file unless the user explicitly requests it; choose a distinct descriptive filename instead.
+
 ## Present the result
 
 Lead with the goal and recommended approach. Then provide an ordered plan, validation strategy, and risks or open questions. Omit empty sections and incidental findings.
 
 Make every step specific enough to implement and verify, but do not include implementation code unless a short interface sketch materially clarifies the plan.
+
+Return a link to the completed Markdown artifact and briefly summarize its recommended approach, validation strategy, and any decisions still needed.
