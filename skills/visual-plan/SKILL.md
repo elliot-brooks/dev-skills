@@ -1,11 +1,11 @@
 ---
 name: visual-plan
-description: Create a clear, implementation-ready plan grounded in the current codebase and deliver it as a readable MDX artifact. Use when the user asks to visualize, map, or explain a proposed development change, architecture, workflow, dependency chain, data flow, or rollout before implementation.
+description: Create a codebase-grounded implementation plan as a standalone interactive HTML diagram with a free-form canvas, panning, and zooming. Use when the user asks to visualize, map, or explain a proposed development change, architecture, workflow, dependency chain, data flow, or rollout before implementation.
 ---
 
 # Visual Plan
 
-Make the structure and sequence of a development change easy to understand and execute.
+Make the structure and sequence of a development change explorable before implementation.
 
 ## Investigate first
 
@@ -13,23 +13,25 @@ Inspect applicable repository instructions, relevant code, tests, configuration,
 
 Treat the product code as read-only unless the user also asks for implementation. Creating a requested plan artifact is allowed. Distinguish confirmed repository facts from assumptions and proposed additions.
 
-## Produce the artifact
+## Produce an interactive diagram
 
-Always create one `.mdx` plan artifact. Do not offer or ask the user to choose an output format. Use their requested location or a sensible repository location when none is specified.
+Always create one standalone `.html` artifact that opens directly in a browser. Do not offer or ask the user to choose an output format. Use their requested location or a sensible repository location when none is specified.
 
-Follow the repository's existing MDX conventions and available components. Otherwise keep the artifact portable with standard Markdown-compatible MDX. Do not invent imports, components, or build configuration.
+Start from [assets/interactive-plan.html](assets/interactive-plan.html). Copy it to the output location and adapt the scene, labels, legend, title, and visual styling to the investigated change. Keep its pan, zoom, fit-to-view, pointer, touch, and keyboard behavior unless the user requests a different interaction model.
 
-## Make the plan readable
+Keep the artifact self-contained: embed its CSS, JavaScript, and SVG rather than adding project dependencies, build configuration, or network-loaded libraries. It must remain usable from a local file and at common desktop and mobile viewport sizes.
 
-Lead with the intended outcome and recommended approach. Organize the rest with descriptive headings, short paragraphs, ordered steps, and compact lists or tables. Make file paths, symbols, boundaries, dependencies, and validation gates easy to scan.
+## Compose the canvas
 
-Use a visual only when it materially clarifies a relationship that prose would make harder to follow. Choose the most suitable form, such as a comparison table, dependency map, timeline, sequence, state model, text tree, Mermaid diagram, inline SVG, or an established repository component. Prefer the smallest visual that resolves the ambiguity, and omit diagrams entirely when the plan is already clear.
+Treat the diagram as a free-form spatial canvas, not a document page or a slide. Arrange components, boundaries, actors, data, events, implementation steps, risks, and validation gates wherever their relationships are clearest. SVG groups, paths, cards, labels, badges, and compact callouts may be combined freely.
 
-Clearly distinguish current behavior, proposed changes, external systems, assumptions, and unresolved decisions. Avoid decorative visuals and unsupported JSX. When a visual depends on renderer-specific behavior, include enough adjacent prose for the plan to remain complete without it.
+Use position, containment, connectors, and numbered paths to make structure and sequence visible. Keep labels short enough to scan while preserving concrete file paths, symbols, interfaces, dependencies, and observable validation criteria where known. Dense plans may extend beyond the initial viewport because the canvas can be panned and zoomed; keep each local region readable and use fit-to-view as the overview.
+
+Clearly distinguish current behavior, proposed changes, external systems, assumptions, risks, and unresolved decisions through consistent visual treatment and a visible legend. Use color together with text or shape so meaning does not depend on color alone. Avoid decorative elements that compete with the plan.
 
 ## Connect the plan to execution
 
-The artifact should cover:
+Represent the relevant parts of the following directly on the canvas:
 
 1. The outcome, scope, meaningful non-goals, and current behavior.
 2. An ordered implementation sequence tied to concrete repository locations when known.
@@ -39,4 +41,8 @@ The artifact should cover:
 
 Do not invent paths, APIs, or dependencies. When evidence is missing, label the item as proposed or unresolved rather than presenting it as current behavior.
 
-Find and use an existing MDX preview or build workflow in the repository when available. Otherwise use an available MDX-capable renderer without adding project dependencies solely for preview. Verify that the MDX compiles, its hierarchy is easy to scan, links and visuals work, and the content is legible. If no compatible renderer is available, validate the MDX source and disclose that the rendered artifact could not be verified. Return a link or path to the completed `.mdx` artifact and identify any renderer-specific capabilities it uses.
+## Verify in a browser
+
+Open the completed local HTML file in an available browser. Check the initial fit, label legibility, connector direction, viewport resizing, and whether overlays obscure content. Exercise drag-to-pan, wheel or trackpad zoom around the pointer, zoom controls, fit-to-view, and keyboard navigation. Inspect both the overview and dense regions at useful zoom levels.
+
+If browser control is unavailable, validate the source and disclose that interaction and visual layout were not verified. Return a link or path to the completed `.html` artifact and briefly state how to navigate it.

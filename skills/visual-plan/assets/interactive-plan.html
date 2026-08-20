@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interactive implementation plan</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #071018;
+        --panel: rgba(13, 25, 36, 0.92);
+        --line: #31475a;
+        --text: #edf5fa;
+        --muted: #9bb0bf;
+        --current: #55b8ff;
+        --proposed: #a8e063;
+        --external: #d5a6ff;
+        --risk: #ffbe5c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--page);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      body {
+        position: relative;
+      }
+
+      #viewport {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        cursor: grab;
+        touch-action: none;
+        background:
+          radial-gradient(circle at 18% 12%, rgba(46, 114, 148, 0.2), transparent 30%),
+          linear-gradient(135deg, #071018 0%, #0a1620 100%);
+      }
+
+      #viewport[data-panning="true"] {
+        cursor: grabbing;
+      }
+
+      #viewport:focus-visible {
+        outline: 2px solid var(--current);
+        outline-offset: -4px;
+      }
+
+      #diagram {
+        width: 100%;
+        height: 100%;
+        display: block;
+        user-select: none;
+      }
+
+      .boundary {
+        fill: rgba(18, 35, 48, 0.72);
+        stroke: var(--line);
+        stroke-width: 2;
+        stroke-dasharray: 8 10;
+      }
+
+      .boundary-label {
+        fill: var(--muted);
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .edge {
+        fill: none;
+        stroke: #648095;
+        stroke-width: 3;
+        marker-end: url(#arrow);
+      }
+
+      .edge.proposed {
+        stroke: var(--proposed);
+      }
+
+      .edge.dashed {
+        stroke-dasharray: 8 8;
+      }
+
+      .node rect {
+        fill: #112535;
+        stroke: #446176;
+        stroke-width: 2;
+        rx: 16;
+        filter: url(#shadow);
+      }
+
+      .node.current rect {
+        stroke: var(--current);
+      }
+
+      .node.proposed rect {
+        fill: #172b25;
+        stroke: var(--proposed);
+      }
+
+      .node.external rect {
+        fill: #281f36;
+        stroke: var(--external);
+      }
+
+      .node.risk rect {
+        fill: #332719;
+        stroke: var(--risk);
+      }
+
+      .node-title {
+        fill: var(--text);
+        font-size: 19px;
+        font-weight: 750;
+      }
+
+      .node-detail {
+        fill: var(--muted);
+        font-size: 14px;
+      }
+
+      .step-badge {
+        fill: var(--proposed);
+      }
+
+      .step-number {
+        fill: #102011;
+        font-size: 14px;
+        font-weight: 850;
+        text-anchor: middle;
+        dominant-baseline: central;
+      }
+
+      .canvas-title {
+        fill: var(--text);
+        font-size: 34px;
+        font-weight: 800;
+      }
+
+      .canvas-subtitle {
+        fill: var(--muted);
+        font-size: 17px;
+      }
+
+      .overlay {
+        position: fixed;
+        z-index: 2;
+        border: 1px solid rgba(111, 143, 165, 0.35);
+        border-radius: 14px;
+        background: var(--panel);
+        box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(12px);
+      }
+
+      .legend {
+        top: 18px;
+        left: 18px;
+        display: flex;
+        gap: 14px;
+        padding: 10px 13px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .swatch {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+
+      .controls {
+        right: 18px;
+        bottom: 18px;
+        display: grid;
+        grid-template-columns: repeat(3, 42px);
+        gap: 7px;
+        padding: 8px;
+      }
+
+      button {
+        width: 42px;
+        height: 38px;
+        border: 1px solid #3c566a;
+        border-radius: 9px;
+        background: #132837;
+        color: var(--text);
+        font: inherit;
+        font-size: 18px;
+        cursor: pointer;
+      }
+
+      button:hover,
+      button:focus-visible {
+        border-color: var(--current);
+        background: #193448;
+        outline: none;
+      }
+
+      #reset-view {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      #zoom-status {
+        right: 18px;
+        bottom: 76px;
+        min-width: 66px;
+        padding: 7px 10px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+      }
+
+      .help {
+        left: 18px;
+        bottom: 18px;
+        padding: 8px 11px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      @media (max-width: 720px) {
+        .legend {
+          max-width: calc(100% - 36px);
+          flex-wrap: wrap;
+        }
+
+        .help {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main
+      id="viewport"
+      tabindex="0"
+      aria-label="Interactive implementation plan. Drag to pan and use the mouse wheel or controls to zoom."
+    >
+      <svg id="diagram" role="img" aria-labelledby="diagram-title diagram-description">
+        <title id="diagram-title">Example implementation plan</title>
+        <desc id="diagram-description">
+          A free-form canvas showing current components, proposed changes, implementation
+          steps, and validation gates. Replace this example scene with the investigated plan.
+        </desc>
+        <defs>
+          <marker
+            id="arrow"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" />
+          </marker>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+            <feDropShadow dx="0" dy="8" stdDeviation="8" flood-opacity="0.28" />
+          </filter>
+        </defs>
+
+        <!-- Replace the contents of #scene with the plan. Keep the group itself: the
+             embedded controls transform it to provide panning and zooming. -->
+        <g id="scene">
+          <text class="canvas-title" x="90" y="64">Interactive implementation plan</text>
+          <text class="canvas-subtitle" x="90" y="94">
+            Outcome, system change, execution order, and validation on one navigable canvas
+          </text>
+
+          <rect class="boundary" x="70" y="130" width="560" height="640" rx="24" />
+          <text class="boundary-label" x="96" y="166">Current system</text>
+
+          <rect class="boundary" x="690" y="130" width="820" height="640" rx="24" />
+          <text class="boundary-label" x="716" y="166">Proposed change</text>
+
+          <path class="edge" d="M 330 280 C 400 280, 430 380, 500 380" />
+          <path class="edge dashed" d="M 330 510 C 410 510, 420 410, 500 410" />
+          <path class="edge proposed" d="M 630 395 C 700 395, 700 270, 770 270" />
+          <path class="edge proposed" d="M 1030 270 C 1100 270, 1100 395, 1170 395" />
+          <path class="edge proposed" d="M 1030 520 C 1100 520, 1100 425, 1170 425" />
+          <path class="edge dashed" d="M 1300 500 C 1300 590, 1140 600, 1140 655" />
+
+          <g class="node current" transform="translate(110 220)">
+            <rect width="220" height="120" />
+            <text class="node-title" x="22" y="38">Existing entry point</text>
+            <text class="node-detail" x="22" y="67">Confirmed file or symbol</text>
+            <text class="node-detail" x="22" y="91">Observed responsibility</text>
+          </g>
+
+          <g class="node external" transform="translate(110 450)">
+            <rect width="220" height="120" />
+            <text class="node-title" x="22" y="38">External dependency</text>
+            <text class="node-detail" x="22" y="67">Contract or boundary</text>
+            <text class="node-detail" x="22" y="91">Compatibility constraint</text>
+          </g>
+
+          <g class="node current" transform="translate(500 335)">
+            <rect width="130" height="120" />
+            <text class="node-title" x="20" y="38">Today</text>
+            <text class="node-detail" x="20" y="67">Observed</text>
+            <text class="node-detail" x="20" y="91">behavior</text>
+          </g>
+
+          <g class="node proposed" transform="translate(770 210)">
+            <rect width="260" height="120" />
+            <circle class="step-badge" cx="24" cy="-8" r="16" />
+            <text class="step-number" x="24" y="-8">1</text>
+            <text class="node-title" x="24" y="40">Introduce boundary</text>
+            <text class="node-detail" x="24" y="70">Concrete repository location</text>
+            <text class="node-detail" x="24" y="94">Interface and ownership</text>
+          </g>
+
+          <g class="node proposed" transform="translate(770 460)">
+            <rect width="260" height="120" />
+            <circle class="step-badge" cx="24" cy="-8" r="16" />
+            <text class="step-number" x="24" y="-8">2</text>
+            <text class="node-title" x="24" y="40">Migrate behavior</text>
+            <text class="node-detail" x="24" y="70">Ordered implementation work</text>
+            <text class="node-detail" x="24" y="94">Compatibility and rollout</text>
+          </g>
+
+          <g class="node proposed" transform="translate(1170 335)">
+            <rect width="260" height="150" />
+            <circle class="step-badge" cx="24" cy="-8" r="16" />
+            <text class="step-number" x="24" y="-8">3</text>
+            <text class="node-title" x="24" y="40">Validate outcome</text>
+            <text class="node-detail" x="24" y="70">Automated checks</text>
+            <text class="node-detail" x="24" y="94">Observable acceptance criteria</text>
+            <text class="node-detail" x="24" y="118">Rollout and rollback gate</text>
+          </g>
+
+          <g class="node risk" transform="translate(1010 655)">
+            <rect width="260" height="92" />
+            <text class="node-title" x="24" y="37">Risk / open decision</text>
+            <text class="node-detail" x="24" y="65">State the evidence still needed</text>
+          </g>
+        </g>
+      </svg>
+    </main>
+
+    <aside class="overlay legend" aria-label="Diagram legend">
+      <span style="color: var(--current)"><i class="swatch"></i>Current</span>
+      <span style="color: var(--proposed)"><i class="swatch"></i>Proposed</span>
+      <span style="color: var(--external)"><i class="swatch"></i>External</span>
+      <span style="color: var(--risk)"><i class="swatch"></i>Risk</span>
+    </aside>
+
+    <div class="overlay help">Drag to pan · Scroll to zoom · Arrow keys to move</div>
+    <output id="zoom-status" class="overlay" aria-live="polite">100%</output>
+    <nav class="overlay controls" aria-label="Diagram zoom controls">
+      <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+      <button id="reset-view" type="button" aria-label="Fit diagram to window">Fit</button>
+      <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+    </nav>
+
+    <script>
+      const viewport = document.getElementById("viewport");
+      const scene = document.getElementById("scene");
+      const zoomStatus = document.getElementById("zoom-status");
+      const minScale = 0.25;
+      const maxScale = 3;
+      const view = { x: 0, y: 0, scale: 1 };
+      let drag = null;
+
+      function clamp(value, minimum, maximum) {
+        return Math.min(maximum, Math.max(minimum, value));
+      }
+
+      function applyTransform() {
+        scene.setAttribute(
+          "transform",
+          `translate(${view.x} ${view.y}) scale(${view.scale})`,
+        );
+        zoomStatus.textContent = `${Math.round(view.scale * 100)}%`;
+      }
+
+      function zoomAt(clientX, clientY, factor) {
+        const bounds = viewport.getBoundingClientRect();
+        const screenX = clientX - bounds.left;
+        const screenY = clientY - bounds.top;
+        const worldX = (screenX - view.x) / view.scale;
+        const worldY = (screenY - view.y) / view.scale;
+        const nextScale = clamp(view.scale * factor, minScale, maxScale);
+
+        view.x = screenX - worldX * nextScale;
+        view.y = screenY - worldY * nextScale;
+        view.scale = nextScale;
+        applyTransform();
+      }
+
+      function zoomFromCenter(factor) {
+        const bounds = viewport.getBoundingClientRect();
+        zoomAt(
+          bounds.left + bounds.width / 2,
+          bounds.top + bounds.height / 2,
+          factor,
+        );
+      }
+
+      function fitView() {
+        const bounds = viewport.getBoundingClientRect();
+        const content = scene.getBBox();
+        const padding = 80;
+        const widthScale = (bounds.width - padding * 2) / content.width;
+        const heightScale = (bounds.height - padding * 2) / content.height;
+
+        view.scale = clamp(Math.min(widthScale, heightScale), minScale, 1.2);
+        view.x = (bounds.width - content.width * view.scale) / 2 - content.x * view.scale;
+        view.y = (bounds.height - content.height * view.scale) / 2 - content.y * view.scale;
+        applyTransform();
+      }
+
+      viewport.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+        viewport.setPointerCapture(event.pointerId);
+        viewport.setAttribute("data-panning", "true");
+      });
+
+      viewport.addEventListener("pointermove", (event) => {
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        view.x += event.clientX - drag.x;
+        view.y += event.clientY - drag.y;
+        drag.x = event.clientX;
+        drag.y = event.clientY;
+        applyTransform();
+      });
+
+      function endDrag(event) {
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        viewport.releasePointerCapture(event.pointerId);
+        viewport.setAttribute("data-panning", "false");
+        drag = null;
+      }
+
+      viewport.addEventListener("pointerup", endDrag);
+      viewport.addEventListener("pointercancel", endDrag);
+      viewport.addEventListener(
+        "wheel",
+        (event) => {
+          event.preventDefault();
+          zoomAt(event.clientX, event.clientY, Math.exp(-event.deltaY * 0.0015));
+        },
+        { passive: false },
+      );
+
+      viewport.addEventListener("keydown", (event) => {
+        const panStep = event.shiftKey ? 80 : 32;
+        const actions = {
+          ArrowLeft: () => (view.x += panStep),
+          ArrowRight: () => (view.x -= panStep),
+          ArrowUp: () => (view.y += panStep),
+          ArrowDown: () => (view.y -= panStep),
+          "+": () => zoomFromCenter(1.2),
+          "=": () => zoomFromCenter(1.2),
+          "-": () => zoomFromCenter(1 / 1.2),
+          "0": fitView,
+        };
+        const action = actions[event.key];
+        if (!action) return;
+        event.preventDefault();
+        action();
+        applyTransform();
+      });
+
+      document.getElementById("zoom-in").addEventListener("click", () => zoomFromCenter(1.2));
+      document
+        .getElementById("zoom-out")
+        .addEventListener("click", () => zoomFromCenter(1 / 1.2));
+      document.getElementById("reset-view").addEventListener("click", fitView);
+
+      requestAnimationFrame(fitView);
+    </script>
+  </body>
+</html>
