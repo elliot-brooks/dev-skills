@@ -1,0 +1,11 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Planning",
+      "description": "Skills for planning, visualizing, and stress-testing software changes.",
+      "skills": ["plan", "visual-plan", "scrutinize"]
+    }
+  ]
+}

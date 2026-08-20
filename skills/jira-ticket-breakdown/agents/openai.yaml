@@ -1,4 +1,0 @@
-interface:
-  display_name: "Jira Ticket Breakdown"
-  short_description: "Summarize Jira ticket metadata"
-  default_prompt: "Use $jira-ticket-breakdown to summarize Jira ticket APX-123."

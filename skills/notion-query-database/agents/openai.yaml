@@ -1,4 +1,0 @@
-interface:
-  display_name: "Notion Query Database"
-  short_description: "Query a Notion database generically"
-  default_prompt: "Use $notion-query-database to query this Notion database from my request."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Confluence Find Page"
-  short_description: "Find matching Confluence pages"
-  default_prompt: "Use $confluence-find-page to find the most relevant Confluence pages for these prompts."

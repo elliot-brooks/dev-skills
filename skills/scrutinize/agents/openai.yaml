@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scrutinize"
+  short_description: "Stress-test a technical plan or design"
+  default_prompt: "Use $scrutinize to challenge this technical plan and recommend concrete improvements."

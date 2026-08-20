@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan"
+  short_description: "Plan development work before implementation"
+  default_prompt: "Use $plan to inspect this repository and produce an implementation-ready plan for the requested change."
