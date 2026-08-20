@@ -7,7 +7,7 @@ A portable collection of developer-focused skills for multiple agents that suppo
 | Skill                                        | Purpose                                                                               |
 | -------------------------------------------- | ------------------------------------------------------------------------------------- |
 | [`plan`](skills/plan/SKILL.md)               | Inspect a codebase and produce an implementation-ready Markdown plan.                 |
-| [`visual-plan`](skills/visual-plan/SKILL.md) | Explain a proposed change with a Mermaid diagram and an ordered implementation plan.  |
+| [`visual-plan`](skills/visual-plan/SKILL.md) | Create a readable MDX implementation plan with visuals where they add clarity.        |
 | [`scrutinize`](skills/scrutinize/SKILL.md)   | Stress-test a technical plan, surface hidden assumptions, and recommend improvements. |
 
 ## Install

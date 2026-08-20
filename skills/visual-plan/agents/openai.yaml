@@ -1,4 +1,4 @@
 interface:
   display_name: "Visual Plan"
-  short_description: "Map development work with a diagram"
-  default_prompt: "Use $visual-plan to map this change as a diagram-first implementation plan grounded in the repository."
+  short_description: "Create clear, viewable MDX plans"
+  default_prompt: "Use $visual-plan to turn this change into a clear, viewable MDX implementation plan grounded in the repository."
