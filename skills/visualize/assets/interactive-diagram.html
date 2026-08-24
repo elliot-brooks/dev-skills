@@ -603,6 +603,8 @@
           }
           else layoutLayered(nodes, model.edges || [], model.direction || "lr");
 
+          reserveHeadingSpace(model, nodes);
+
           const nodeById = new Map(nodes.map((node) => [node.id, node]));
           renderGroups(model.groups || [], nodeById);
 
@@ -732,6 +734,29 @@
               if (node._y >= lower._y) node._y += shift;
             }
           }
+        }
+
+        function reserveHeadingSpace(model, nodes) {
+          if (!nodes.length) return 0;
+          const nodeById = new Map(nodes.map((node) => [node.id, node]));
+          const contentTops = nodes.map((node) => node._y);
+
+          for (const group of model.groups || []) {
+            const members = (group.nodeIds || [])
+              .map((id) => nodeById.get(String(id)))
+              .filter(Boolean);
+            if (!members.length) continue;
+            const padding = Number(group.padding) || 34;
+            contentTops.push(
+              Math.min(...members.map((node) => node._y)) - padding - 16,
+            );
+          }
+
+          const headingBottom = model.subtitle ? 126 : 82;
+          const requiredContentTop = headingBottom + 44;
+          const shift = Math.max(0, requiredContentTop - Math.min(...contentTops));
+          for (const node of nodes) node._y += shift;
+          return shift;
         }
 
         function layoutLayered(nodes, edges, direction) {

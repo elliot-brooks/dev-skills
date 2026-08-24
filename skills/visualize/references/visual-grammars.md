@@ -125,6 +125,8 @@ When a diagram grows beyond roughly twelve primary nodes, collapse detail into b
 
 The template waits for browser fonts, measures the rendered geometry, and tries alternate label positions before fitting the canvas. It then checks label-to-node, label-to-label, label-to-path, connector-to-node, and arrow-direction invariants.
 
+Before rendering groups, the template reserves a heading-safe region. It measures the earliest content position from both cards and padded group envelopes, then shifts the graph as one unit when a group label or boundary would enter the title or subtitle area. Do not compensate by offsetting individual grouped cards.
+
 - `#diagram[data-layout-valid="true"]` means the automated geometry audit passed.
 - `#diagram[data-layout-valid="false"]` displays a visible warning and blocks delivery.
 - `globalThis.visualizeLayoutReport.issues` contains the remaining failures to resolve.
