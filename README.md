@@ -8,6 +8,7 @@ A portable collection of developer-focused skills for multiple agents that suppo
 | -------------------------------------------- | ------------------------------------------------------------------------------------- |
 | [`plan`](skills/plan/SKILL.md)               | Inspect a codebase and produce an implementation-ready Markdown plan.                 |
 | [`visual-plan`](skills/visual-plan/SKILL.md) | Create a free-form HTML implementation diagram with interactive pan and zoom.          |
+| [`visualize`](skills/visualize/SKILL.md)     | Turn systems, flows, hierarchies, and concepts into interactive visual explanations.   |
 | [`scrutinize`](skills/scrutinize/SKILL.md)   | Stress-test a technical plan, surface hidden assumptions, and recommend improvements. |
 
 ## Install

@@ -1,0 +1,1023 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interactive visual explanation</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #071018;
+        --panel: rgba(13, 25, 36, 0.94);
+        --surface: #112535;
+        --line: #385166;
+        --edge: #718da2;
+        --text: #edf5fa;
+        --muted: #9bb0bf;
+        --focus: #55b8ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--page);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      #viewport {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        cursor: grab;
+        touch-action: none;
+        background:
+          radial-gradient(circle at 16% 10%, rgba(46, 114, 148, 0.2), transparent 30%),
+          linear-gradient(135deg, #071018 0%, #0a1620 100%);
+      }
+
+      #viewport[data-panning="true"] {
+        cursor: grabbing;
+      }
+
+      #viewport:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: -4px;
+      }
+
+      #diagram {
+        width: 100%;
+        height: 100%;
+        display: block;
+        user-select: none;
+      }
+
+      .canvas-title {
+        fill: var(--text);
+        font-size: 40px;
+        font-weight: 800;
+      }
+
+      .canvas-subtitle {
+        fill: var(--muted);
+        font-size: 20px;
+      }
+
+      .boundary {
+        fill: rgba(18, 35, 48, 0.58);
+        stroke: var(--line);
+        stroke-width: 2;
+        stroke-dasharray: 8 10;
+      }
+
+      .boundary-label {
+        fill: var(--muted);
+        font-size: 16px;
+        font-weight: 750;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .edge {
+        fill: none;
+        stroke: var(--edge);
+        stroke-width: 3;
+        marker-end: url(#arrow);
+      }
+
+      .edge.dashed {
+        stroke-dasharray: 9 8;
+      }
+
+      .edge.bidirectional {
+        marker-start: url(#arrow-start);
+      }
+
+      .edge-label {
+        fill: var(--muted);
+        font-size: 16px;
+        font-weight: 700;
+        pointer-events: none;
+      }
+
+      .edge-label-bg {
+        fill: rgba(7, 16, 24, 0.94);
+        stroke: rgba(113, 141, 162, 0.42);
+        stroke-width: 1;
+        pointer-events: none;
+      }
+
+      .node-card {
+        fill: var(--surface);
+        stroke: var(--line);
+        stroke-width: 2;
+        rx: 16;
+        filter: url(#shadow);
+      }
+
+      .node-accent {
+        rx: 3;
+      }
+
+      .node-category {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .node-status {
+        fill: var(--muted);
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: 0.08em;
+        text-anchor: end;
+        text-transform: uppercase;
+      }
+
+      .node-title {
+        fill: var(--text);
+        font-size: 22px;
+        font-weight: 760;
+      }
+
+      .node-detail {
+        fill: var(--muted);
+        font-size: 16px;
+      }
+
+      .lifeline {
+        stroke: #506a7e;
+        stroke-width: 2;
+        stroke-dasharray: 8 8;
+      }
+
+      .step-badge {
+        fill: var(--panel);
+        stroke: var(--line);
+        stroke-width: 2;
+      }
+
+      .step-number {
+        fill: var(--text);
+        font-size: 13px;
+        font-weight: 800;
+        text-anchor: middle;
+        dominant-baseline: central;
+      }
+
+      .overlay {
+        position: fixed;
+        z-index: 2;
+        border: 1px solid rgba(111, 143, 165, 0.35);
+        border-radius: 14px;
+        background: var(--panel);
+        box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(12px);
+      }
+
+      .legend {
+        top: 18px;
+        left: 18px;
+        display: flex;
+        max-width: calc(100% - 36px);
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 9px 12px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .legend:empty {
+        display: none;
+      }
+
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .swatch {
+        width: 10px;
+        height: 10px;
+        border: 2px solid currentColor;
+        border-radius: 3px;
+        background: color-mix(in srgb, currentColor 24%, transparent);
+      }
+
+      .controls {
+        right: 18px;
+        bottom: 18px;
+        display: grid;
+        grid-template-columns: repeat(3, 42px);
+        gap: 7px;
+        padding: 8px;
+      }
+
+      button {
+        width: 42px;
+        height: 38px;
+        border: 1px solid #3c566a;
+        border-radius: 9px;
+        background: #132837;
+        color: var(--text);
+        font: inherit;
+        font-size: 18px;
+        cursor: pointer;
+      }
+
+      button:hover,
+      button:focus-visible {
+        border-color: var(--focus);
+        background: #193448;
+        outline: none;
+      }
+
+      #reset-view {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      #zoom-status {
+        right: 18px;
+        bottom: 76px;
+        min-width: 66px;
+        padding: 7px 10px;
+        color: var(--muted);
+        font-size: 13px;
+        text-align: center;
+      }
+
+      .help {
+        left: 18px;
+        bottom: 18px;
+        padding: 8px 11px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      #error-panel {
+        top: 50%;
+        left: 50%;
+        display: none;
+        max-width: min(560px, calc(100% - 40px));
+        padding: 18px 20px;
+        color: #ffd5d5;
+        transform: translate(-50%, -50%);
+      }
+
+      @media (max-width: 720px) {
+        .help {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main
+      id="viewport"
+      tabindex="0"
+      aria-label="Interactive visual explanation. Drag to pan and use the mouse wheel or controls to zoom."
+    >
+      <svg id="diagram" role="img" aria-labelledby="diagram-title diagram-description">
+        <title id="diagram-title">Example visual explanation</title>
+        <desc id="diagram-description">
+          An interactive diagram generated from the embedded diagram data.
+        </desc>
+        <defs>
+          <marker
+            id="arrow"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" />
+          </marker>
+          <marker
+            id="arrow-start"
+            viewBox="0 0 10 10"
+            refX="1"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M 10 0 L 0 5 L 10 10 z" fill="context-stroke" />
+          </marker>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="155%">
+            <feDropShadow dx="0" dy="8" stdDeviation="8" flood-opacity="0.28" />
+          </filter>
+        </defs>
+        <g id="scene"></g>
+      </svg>
+    </main>
+
+    <aside id="legend" class="overlay legend" aria-label="Diagram legend"></aside>
+    <div class="overlay help">Drag to pan · Scroll to zoom · Arrow keys to move</div>
+    <output id="zoom-status" class="overlay" aria-live="polite">100%</output>
+    <nav class="overlay controls" aria-label="Diagram zoom controls">
+      <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+      <button id="reset-view" type="button" aria-label="Fit diagram to window">Fit</button>
+      <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+    </nav>
+    <div id="error-panel" class="overlay" role="alert"></div>
+
+    <!-- Replace this JSON with the subject being visualized. Keep identifiers unique. -->
+    <script id="diagram-data" type="application/json">
+      {
+        "title": "How does a request move through the system?",
+        "subtitle": "A generic flow example — replace the diagram-data JSON with the real subject",
+        "type": "flow",
+        "direction": "lr",
+        "categories": {
+          "entry": { "label": "Entry point", "color": "#55b8ff", "fill": "#112535" },
+          "component": { "label": "Component", "color": "#a8e063", "fill": "#172b25" },
+          "external": { "label": "External", "color": "#d5a6ff", "fill": "#281f36" },
+          "question": { "label": "Question", "color": "#ffbe5c", "fill": "#332719" }
+        },
+        "nodes": [
+          {
+            "id": "entry",
+            "label": "Request entry",
+            "detail": ["Actor or interface", "Known starting point"],
+            "category": "entry",
+            "status": "known"
+          },
+          {
+            "id": "core",
+            "label": "Core behavior",
+            "detail": ["Responsibility being explained"],
+            "category": "component",
+            "status": "known"
+          },
+          {
+            "id": "dependency",
+            "label": "External dependency",
+            "detail": ["Boundary or destination"],
+            "category": "external",
+            "status": "known"
+          }
+        ],
+        "edges": [
+          { "from": "entry", "to": "core", "label": "invokes", "kind": "call" },
+          { "from": "core", "to": "dependency", "label": "sends data", "kind": "data" }
+        ],
+        "groups": [],
+        "annotations": [
+          {
+            "label": "Unresolved detail",
+            "detail": ["Replace or remove this annotation"],
+            "x": 600,
+            "y": 470,
+            "category": "question"
+          }
+        ]
+      }
+    </script>
+
+    <script>
+      (() => {
+        "use strict";
+
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const viewport = document.getElementById("viewport");
+        const scene = document.getElementById("scene");
+        const legend = document.getElementById("legend");
+        const zoomStatus = document.getElementById("zoom-status");
+        const errorPanel = document.getElementById("error-panel");
+        const minScale = 0.22;
+        const maxScale = 3;
+        const view = { x: 0, y: 0, scale: 1 };
+        let drag = null;
+
+        const fallbackCategories = {
+          default: { label: "Element", color: "#55b8ff", fill: "#112535" },
+          entry: { label: "Entry point", color: "#55b8ff", fill: "#112535" },
+          component: { label: "Component", color: "#a8e063", fill: "#172b25" },
+          external: { label: "External", color: "#d5a6ff", fill: "#281f36" },
+          data: { label: "Data", color: "#64d8cb", fill: "#12302f" },
+          decision: { label: "Decision", color: "#ff8f70", fill: "#35201d" },
+          question: { label: "Question", color: "#ffbe5c", fill: "#332719" },
+        };
+
+        let data;
+        try {
+          data = JSON.parse(document.getElementById("diagram-data").textContent);
+          render(data);
+          requestAnimationFrame(fitView);
+        } catch (error) {
+          errorPanel.style.display = "block";
+          errorPanel.textContent = `The embedded diagram data could not be rendered: ${error.message}`;
+          throw error;
+        }
+
+        function createSvg(name, attributes = {}, text) {
+          const element = document.createElementNS(SVG_NS, name);
+          for (const [key, value] of Object.entries(attributes)) {
+            if (value !== undefined && value !== null) {
+              element.setAttribute(key, String(value));
+            }
+          }
+          if (text !== undefined) element.textContent = text;
+          return element;
+        }
+
+        function categoryFor(key) {
+          const fallback = fallbackCategories[key] || fallbackCategories.default;
+          return { ...fallback, ...(data.categories?.[key] || {}) };
+        }
+
+        function detailLines(detail) {
+          if (!detail) return [];
+          return (Array.isArray(detail) ? detail : [detail]).flatMap((line) =>
+            wrapWords(String(line), 31),
+          );
+        }
+
+        function wrapWords(value, maxCharacters) {
+          const words = String(value).trim().split(/\s+/).filter(Boolean);
+          if (!words.length) return [];
+          const lines = [];
+          let line = "";
+          for (const word of words) {
+            const candidate = line ? `${line} ${word}` : word;
+            if (candidate.length > maxCharacters && line) {
+              lines.push(line);
+              line = word;
+            } else {
+              line = candidate;
+            }
+          }
+          if (line) lines.push(line);
+          return lines;
+        }
+
+        function normalizeNodes(rawNodes) {
+          return (rawNodes || []).map((raw, index) => {
+            const width = Number(raw.width) || 280;
+            const titleLines = wrapWords(raw.label || raw.id || "Untitled", Math.max(18, Math.floor(width / 11)));
+            const details = detailLines(raw.detail);
+            const height = Number(raw.height) || Math.max(124, 78 + titleLines.length * 28 + details.length * 23);
+            return {
+              ...raw,
+              id: String(raw.id || `node-${index + 1}`),
+              label: raw.label || raw.id || `Node ${index + 1}`,
+              category: raw.category || "default",
+              status: raw.status || "known",
+              order: Number.isFinite(Number(raw.order)) ? Number(raw.order) : index,
+              _width: width,
+              _height: height,
+              _titleLines: titleLines,
+              _detailLines: details,
+            };
+          });
+        }
+
+        function render(model) {
+          if (!model.title) throw new Error("diagram-data requires a title");
+          document.title = model.title;
+          document.getElementById("diagram-title").textContent = model.title;
+          document.getElementById("diagram-description").textContent =
+            model.description || model.subtitle || `Interactive ${model.type || "map"} diagram: ${model.title}`;
+          viewport.setAttribute(
+            "aria-label",
+            `${model.title}. Interactive diagram: drag to pan and use the mouse wheel or controls to zoom.`,
+          );
+
+          scene.replaceChildren();
+          renderHeading(model);
+          const nodes = normalizeNodes(model.nodes);
+          if ((model.type || "map") === "sequence") {
+            renderSequence(model, nodes);
+          } else {
+            renderGraph(model, nodes);
+          }
+          renderLegend(model, nodes);
+        }
+
+        function renderHeading(model) {
+          scene.append(
+            createSvg("text", { class: "canvas-title", x: 80, y: 66 }, model.title),
+          );
+          if (model.subtitle) {
+            scene.append(
+              createSvg("text", { class: "canvas-subtitle", x: 80, y: 102 }, model.subtitle),
+            );
+          }
+        }
+
+        function renderGraph(model, nodes) {
+          const type = model.type || "map";
+          if (type === "map") layoutMap(nodes);
+          else layoutLayered(nodes, model.edges || [], model.direction || "lr");
+
+          const nodeById = new Map(nodes.map((node) => [node.id, node]));
+          renderGroups(model.groups || [], nodeById);
+
+          for (const edge of model.edges || []) {
+            const from = nodeById.get(String(edge.from));
+            const to = nodeById.get(String(edge.to));
+            if (from && to) renderGraphEdge(edge, from, to, model.direction, type);
+          }
+
+          for (const node of nodes) renderNode(node);
+          renderAnnotations(model.annotations || []);
+        }
+
+        function layoutMap(nodes) {
+          const columns = Math.max(1, Math.ceil(Math.sqrt(nodes.length)));
+          nodes.forEach((node, index) => {
+            node._x = Number.isFinite(Number(node.x)) ? Number(node.x) : 90 + (index % columns) * 340;
+            node._y = Number.isFinite(Number(node.y)) ? Number(node.y) : 150 + Math.floor(index / columns) * 210;
+          });
+        }
+
+        function layoutLayered(nodes, edges, direction) {
+          const nodeById = new Map(nodes.map((node) => [node.id, node]));
+          const outgoing = new Map(nodes.map((node) => [node.id, []]));
+          const indegree = new Map(nodes.map((node) => [node.id, 0]));
+          const rank = new Map(nodes.map((node) => [node.id, Number.isFinite(Number(node.rank)) ? Number(node.rank) : 0]));
+
+          for (const edge of edges) {
+            const from = String(edge.from);
+            const to = String(edge.to);
+            if (!nodeById.has(from) || !nodeById.has(to) || from === to) continue;
+            outgoing.get(from).push(to);
+            indegree.set(to, indegree.get(to) + 1);
+          }
+
+          const queue = nodes
+            .filter((node) => indegree.get(node.id) === 0)
+            .sort((a, b) => a.order - b.order);
+          const visited = new Set();
+          while (queue.length) {
+            const current = queue.shift();
+            if (visited.has(current.id)) continue;
+            visited.add(current.id);
+            for (const targetId of outgoing.get(current.id)) {
+              const target = nodeById.get(targetId);
+              if (!Number.isFinite(Number(target.rank))) {
+                rank.set(targetId, Math.max(rank.get(targetId), rank.get(current.id) + 1));
+              }
+              indegree.set(targetId, indegree.get(targetId) - 1);
+              if (indegree.get(targetId) === 0) queue.push(target);
+            }
+            queue.sort((a, b) => a.order - b.order);
+          }
+
+          nodes.filter((node) => !visited.has(node.id)).forEach((node, index) => {
+            if (!Number.isFinite(Number(node.rank))) rank.set(node.id, index);
+          });
+
+          const layers = new Map();
+          for (const node of nodes) {
+            const layer = rank.get(node.id) || 0;
+            if (!layers.has(layer)) layers.set(layer, []);
+            layers.get(layer).push(node);
+          }
+          const orderedLayers = [...layers.entries()].sort(([a], [b]) => a - b);
+          orderedLayers.forEach(([, layer]) => layer.sort((a, b) => a.order - b.order));
+
+          if (direction === "tb") {
+            const rowGap = 120;
+            const columnGap = 60;
+            let y = 150;
+            const widest = Math.max(
+              1,
+              ...orderedLayers.map(([, layer]) =>
+                layer.reduce((total, node) => total + node._width, 0) + Math.max(0, layer.length - 1) * columnGap,
+              ),
+            );
+            for (const [, layer] of orderedLayers) {
+              const width = layer.reduce((total, node) => total + node._width, 0) + Math.max(0, layer.length - 1) * columnGap;
+              let x = 80 + (widest - width) / 2;
+              const rowHeight = Math.max(...layer.map((node) => node._height));
+              for (const node of layer) {
+                node._x = x;
+                node._y = y;
+                x += node._width + columnGap;
+              }
+              y += rowHeight + rowGap;
+            }
+          } else {
+            const columnGap = 130;
+            const rowGap = 54;
+            const tallest = Math.max(
+              1,
+              ...orderedLayers.map(([, layer]) =>
+                layer.reduce((total, node) => total + node._height, 0) + Math.max(0, layer.length - 1) * rowGap,
+              ),
+            );
+            let x = 80;
+            for (const [, layer] of orderedLayers) {
+              const height = layer.reduce((total, node) => total + node._height, 0) + Math.max(0, layer.length - 1) * rowGap;
+              let y = 140 + (tallest - height) / 2;
+              const columnWidth = Math.max(...layer.map((node) => node._width));
+              for (const node of layer) {
+                node._x = x;
+                node._y = y;
+                y += node._height + rowGap;
+              }
+              x += columnWidth + columnGap;
+            }
+          }
+        }
+
+        function renderGroups(groups, nodeById) {
+          for (const group of groups) {
+            const members = (group.nodeIds || []).map((id) => nodeById.get(String(id))).filter(Boolean);
+            if (!members.length) continue;
+            const padding = Number(group.padding) || 34;
+            const minX = Math.min(...members.map((node) => node._x)) - padding;
+            const minY = Math.min(...members.map((node) => node._y)) - padding - 16;
+            const maxX = Math.max(...members.map((node) => node._x + node._width)) + padding;
+            const maxY = Math.max(...members.map((node) => node._y + node._height)) + padding;
+            scene.append(
+              createSvg("rect", {
+                class: "boundary",
+                x: minX,
+                y: minY,
+                width: maxX - minX,
+                height: maxY - minY,
+                rx: 24,
+              }),
+              createSvg("text", { class: "boundary-label", x: minX + 22, y: minY + 27 }, group.label || group.id || "Group"),
+            );
+          }
+        }
+
+        function connectionPoints(from, to, direction, type) {
+          const fromCenter = { x: from._x + from._width / 2, y: from._y + from._height / 2 };
+          const toCenter = { x: to._x + to._width / 2, y: to._y + to._height / 2 };
+          const horizontal = type !== "map" ? direction !== "tb" : Math.abs(toCenter.x - fromCenter.x) >= Math.abs(toCenter.y - fromCenter.y);
+
+          if (horizontal) {
+            const sign = toCenter.x >= fromCenter.x ? 1 : -1;
+            return {
+              horizontal,
+              from: { x: fromCenter.x + sign * from._width / 2, y: fromCenter.y },
+              to: { x: toCenter.x - sign * to._width / 2, y: toCenter.y },
+            };
+          }
+          const sign = toCenter.y >= fromCenter.y ? 1 : -1;
+          return {
+            horizontal,
+            from: { x: fromCenter.x, y: fromCenter.y + sign * from._height / 2 },
+            to: { x: toCenter.x, y: toCenter.y - sign * to._height / 2 },
+          };
+        }
+
+        function renderGraphEdge(edge, from, to, direction, type) {
+          const category = edge.category ? categoryFor(edge.category) : null;
+          const color = edge.color || category?.color || "var(--edge)";
+          let pathData;
+          let labelX;
+          let labelY;
+          let labelAnchor = "middle";
+
+          if (from.id === to.id) {
+            const x = from._x + from._width;
+            const y = from._y + from._height / 2;
+            pathData = `M ${x} ${y} C ${x + 85} ${y - 65}, ${x + 85} ${y + 65}, ${x} ${y + 20}`;
+            labelX = x + 100;
+            labelY = y + 5;
+            labelAnchor = "start";
+          } else if (type !== "map" && direction === "tb" && from._y > to._y) {
+            const startX = from._x + from._width;
+            const startY = from._y + from._height / 2;
+            const endX = to._x + to._width;
+            const endY = to._y + to._height / 2;
+            const outerX = Math.max(startX, endX) + 140;
+            pathData = `M ${startX} ${startY} C ${outerX} ${startY}, ${outerX} ${endY}, ${endX} ${endY}`;
+            labelX = outerX + 18;
+            labelY = (startY + endY) / 2 + 5;
+            labelAnchor = "start";
+          } else if (type !== "map" && direction !== "tb" && from._x > to._x) {
+            const startX = from._x + from._width / 2;
+            const startY = from._y + from._height;
+            const endX = to._x + to._width / 2;
+            const endY = to._y + to._height;
+            const outerY = Math.max(startY, endY) + 120;
+            pathData = `M ${startX} ${startY} C ${startX} ${outerY}, ${endX} ${outerY}, ${endX} ${endY}`;
+            labelX = (startX + endX) / 2;
+            labelY = outerY + 28;
+          } else {
+            const points = connectionPoints(from, to, direction, type);
+            const dx = points.to.x - points.from.x;
+            const dy = points.to.y - points.from.y;
+            if (points.horizontal) {
+              const curve = Math.max(55, Math.abs(dx) * 0.45);
+              const sign = Math.sign(dx) || 1;
+              pathData = `M ${points.from.x} ${points.from.y} C ${points.from.x + curve * sign} ${points.from.y}, ${points.to.x - curve * sign} ${points.to.y}, ${points.to.x} ${points.to.y}`;
+            } else {
+              const curve = Math.max(55, Math.abs(dy) * 0.45);
+              const sign = Math.sign(dy) || 1;
+              pathData = `M ${points.from.x} ${points.from.y} C ${points.from.x} ${points.from.y + curve * sign}, ${points.to.x} ${points.to.y - curve * sign}, ${points.to.x} ${points.to.y}`;
+            }
+            if (points.horizontal) {
+              labelX = (points.from.x + points.to.x) / 2;
+              labelY = (points.from.y + points.to.y) / 2 - 14;
+            } else {
+              labelX = (points.from.x + points.to.x) / 2 + 18;
+              labelY = (points.from.y + points.to.y) / 2 + 5;
+              labelAnchor = "start";
+            }
+          }
+
+          const classes = ["edge"];
+          if (edge.dashed || edge.kind === "return" || edge.kind === "inferred") classes.push("dashed");
+          if (edge.bidirectional) classes.push("bidirectional");
+          scene.append(createSvg("path", { class: classes.join(" "), d: pathData, style: `stroke:${color}` }));
+          if (edge.label) {
+            renderEdgeLabel(edge.label, labelX, labelY, labelAnchor);
+          }
+        }
+
+        function renderEdgeLabel(label, x, y, anchor = "middle") {
+          const group = createSvg("g", { "aria-label": label });
+          const text = createSvg("text", { class: "edge-label", x, y, "text-anchor": anchor }, label);
+          group.append(text);
+          scene.append(group);
+          const bounds = text.getBBox();
+          group.insertBefore(
+            createSvg("rect", {
+              class: "edge-label-bg",
+              x: bounds.x - 8,
+              y: bounds.y - 5,
+              width: bounds.width + 16,
+              height: bounds.height + 10,
+              rx: 8,
+            }),
+            text,
+          );
+        }
+
+        function statusDash(status) {
+          return {
+            inferred: "9 6",
+            proposed: "4 5",
+            unknown: "2 7",
+          }[status];
+        }
+
+        function renderNode(node) {
+          const category = categoryFor(node.category);
+          const group = createSvg("g", {
+            class: "node",
+            transform: `translate(${node._x} ${node._y})`,
+            role: "group",
+            "aria-label": `${node.label}. ${node._detailLines.join(" ")}`,
+          });
+          group.append(createSvg("title", {}, `${node.label}. ${node._detailLines.join(" ")}`));
+          group.append(
+            createSvg("rect", {
+              class: "node-card",
+              width: node._width,
+              height: node._height,
+              style: `fill:${category.fill};stroke:${category.color}`,
+              "stroke-dasharray": statusDash(node.status),
+            }),
+            createSvg("rect", {
+              class: "node-accent",
+              x: 16,
+              y: 14,
+              width: 5,
+              height: node._height - 28,
+              fill: category.color,
+            }),
+            createSvg("text", {
+              class: "node-category",
+              x: 32,
+              y: 27,
+              fill: category.color,
+            }, category.label),
+          );
+          if (node.status !== "known") {
+            group.append(
+              createSvg("text", { class: "node-status", x: node._width - 18, y: 27 }, node.status),
+            );
+          }
+
+          let y = 62;
+          for (const line of node._titleLines) {
+            group.append(createSvg("text", { class: "node-title", x: 32, y }, line));
+            y += 28;
+          }
+          y += 7;
+          for (const line of node._detailLines) {
+            group.append(createSvg("text", { class: "node-detail", x: 32, y }, line));
+            y += 23;
+          }
+          scene.append(group);
+        }
+
+        function renderAnnotations(annotations) {
+          const normalized = normalizeNodes(
+            annotations.map((annotation, index) => ({
+              id: annotation.id || `annotation-${index + 1}`,
+              category: annotation.category || "question",
+              status: annotation.status || "known",
+              width: annotation.width || 270,
+              ...annotation,
+            })),
+          );
+          layoutMap(normalized);
+          for (const annotation of normalized) renderNode(annotation);
+        }
+
+        function renderSequence(model, nodes) {
+          const participants = [...nodes].sort((a, b) => a.order - b.order);
+          const participantById = new Map(participants.map((node) => [node.id, node]));
+          const startY = 145;
+          const messageGap = 94;
+          let x = 90;
+
+          for (const participant of participants) {
+            participant._width = Number(participant.width) || participant._width;
+            participant._height = Math.max(108, participant._height);
+            participant._x = x;
+            participant._y = startY;
+            participant._centerX = x + participant._width / 2;
+            x += participant._width + 100;
+          }
+
+          const participantHeight = Math.max(108, ...participants.map((participant) => participant._height));
+          const lifelineY = startY + participantHeight + 34;
+          const endY = lifelineY + Math.max(1, (model.edges || []).length) * messageGap + 60;
+
+          for (const participant of participants) {
+            scene.append(
+              createSvg("line", {
+                class: "lifeline",
+                x1: participant._centerX,
+                y1: lifelineY,
+                x2: participant._centerX,
+                y2: endY,
+              }),
+            );
+          }
+
+          (model.edges || []).forEach((edge, index) => {
+            const from = participantById.get(String(edge.from));
+            const to = participantById.get(String(edge.to));
+            if (!from || !to) return;
+            const y = lifelineY + index * messageGap + 36;
+            const color = edge.color || (edge.category ? categoryFor(edge.category).color : "var(--edge)");
+            const classes = ["edge"];
+            if (edge.dashed || edge.kind === "return") classes.push("dashed");
+            if (edge.bidirectional) classes.push("bidirectional");
+            let pathData;
+            let labelX;
+            if (from.id === to.id) {
+              pathData = `M ${from._centerX} ${y} C ${from._centerX + 90} ${y}, ${from._centerX + 90} ${y + 48}, ${from._centerX} ${y + 48}`;
+              labelX = from._centerX + 86;
+            } else {
+              const sign = to._centerX >= from._centerX ? 1 : -1;
+              pathData = `M ${from._centerX} ${y} L ${to._centerX - sign * 7} ${y}`;
+              labelX = (from._centerX + to._centerX) / 2;
+            }
+            scene.append(
+              createSvg("path", { class: classes.join(" "), d: pathData, style: `stroke:${color}` }),
+              createSvg("circle", { class: "step-badge", cx: from._centerX, cy: y, r: 13 }),
+              createSvg("text", { class: "step-number", x: from._centerX, y }, index + 1),
+            );
+            if (edge.label) {
+              renderEdgeLabel(edge.label, labelX, y - 14);
+            }
+          });
+
+          for (const participant of participants) renderNode(participant);
+          renderAnnotations(model.annotations || []);
+        }
+
+        function renderLegend(model, nodes) {
+          legend.replaceChildren();
+          const keys = new Set(nodes.map((node) => node.category || "default"));
+          for (const annotation of model.annotations || []) keys.add(annotation.category || "question");
+          for (const key of keys) {
+            const category = categoryFor(key);
+            const item = document.createElement("span");
+            item.className = "legend-item";
+            item.style.color = category.color;
+            const swatch = document.createElement("i");
+            swatch.className = "swatch";
+            const label = document.createElement("span");
+            label.textContent = category.label;
+            item.append(swatch, label);
+            legend.append(item);
+          }
+        }
+
+        function clamp(value, minimum, maximum) {
+          return Math.min(maximum, Math.max(minimum, value));
+        }
+
+        function applyTransform() {
+          scene.setAttribute("transform", `translate(${view.x} ${view.y}) scale(${view.scale})`);
+          zoomStatus.textContent = `${Math.round(view.scale * 100)}%`;
+        }
+
+        function zoomAt(clientX, clientY, factor) {
+          const bounds = viewport.getBoundingClientRect();
+          const screenX = clientX - bounds.left;
+          const screenY = clientY - bounds.top;
+          const worldX = (screenX - view.x) / view.scale;
+          const worldY = (screenY - view.y) / view.scale;
+          const nextScale = clamp(view.scale * factor, minScale, maxScale);
+          view.x = screenX - worldX * nextScale;
+          view.y = screenY - worldY * nextScale;
+          view.scale = nextScale;
+          applyTransform();
+        }
+
+        function zoomFromCenter(factor) {
+          const bounds = viewport.getBoundingClientRect();
+          zoomAt(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2, factor);
+        }
+
+        function fitView() {
+          const bounds = viewport.getBoundingClientRect();
+          const content = scene.getBBox();
+          if (!content.width || !content.height) return;
+          const padding = Math.min(90, Math.max(36, Math.min(bounds.width, bounds.height) * 0.08));
+          const widthScale = (bounds.width - padding * 2) / content.width;
+          const heightScale = (bounds.height - padding * 2) / content.height;
+          view.scale = clamp(Math.min(widthScale, heightScale), minScale, 1.2);
+          view.x = (bounds.width - content.width * view.scale) / 2 - content.x * view.scale;
+          view.y = (bounds.height - content.height * view.scale) / 2 - content.y * view.scale;
+          applyTransform();
+        }
+
+        viewport.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0) return;
+          drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+          viewport.setPointerCapture(event.pointerId);
+          viewport.setAttribute("data-panning", "true");
+        });
+
+        viewport.addEventListener("pointermove", (event) => {
+          if (!drag || drag.pointerId !== event.pointerId) return;
+          view.x += event.clientX - drag.x;
+          view.y += event.clientY - drag.y;
+          drag.x = event.clientX;
+          drag.y = event.clientY;
+          applyTransform();
+        });
+
+        function endDrag(event) {
+          if (!drag || drag.pointerId !== event.pointerId) return;
+          viewport.releasePointerCapture(event.pointerId);
+          viewport.setAttribute("data-panning", "false");
+          drag = null;
+        }
+
+        viewport.addEventListener("pointerup", endDrag);
+        viewport.addEventListener("pointercancel", endDrag);
+        viewport.addEventListener(
+          "wheel",
+          (event) => {
+            event.preventDefault();
+            zoomAt(event.clientX, event.clientY, Math.exp(-event.deltaY * 0.0015));
+          },
+          { passive: false },
+        );
+
+        viewport.addEventListener("keydown", (event) => {
+          const panStep = event.shiftKey ? 80 : 32;
+          const actions = {
+            ArrowLeft: () => (view.x += panStep),
+            ArrowRight: () => (view.x -= panStep),
+            ArrowUp: () => (view.y += panStep),
+            ArrowDown: () => (view.y -= panStep),
+            "+": () => zoomFromCenter(1.2),
+            "=": () => zoomFromCenter(1.2),
+            "-": () => zoomFromCenter(1 / 1.2),
+            "0": fitView,
+          };
+          const action = actions[event.key];
+          if (!action) return;
+          event.preventDefault();
+          action();
+          applyTransform();
+        });
+
+        document.getElementById("zoom-in").addEventListener("click", () => zoomFromCenter(1.2));
+        document.getElementById("zoom-out").addEventListener("click", () => zoomFromCenter(1 / 1.2));
+        document.getElementById("reset-view").addEventListener("click", fitView);
+      })();
+    </script>
+  </body>
+</html>

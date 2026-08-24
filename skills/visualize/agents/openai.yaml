@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visualize"
+  short_description: "Create interactive visual explanations"
+  default_prompt: "Use $visualize to explain this visually with the diagram style that best fits the relationships."
