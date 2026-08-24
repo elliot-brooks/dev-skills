@@ -464,9 +464,7 @@
 
         function detailLines(detail) {
           if (!detail) return [];
-          return (Array.isArray(detail) ? detail : [detail]).flatMap((line) =>
-            wrapWords(String(line), 31),
-          );
+          return (Array.isArray(detail) ? detail : [detail]).map(String);
         }
 
         function wrapWords(value, maxCharacters) {
@@ -487,16 +485,67 @@
           return lines;
         }
 
+        function measureTextWidth(value, className) {
+          const probe = createSvg("text", {
+            class: className,
+            x: -10000,
+            y: -10000,
+            visibility: "hidden",
+          }, value);
+          scene.append(probe);
+          const width = probe.getComputedTextLength();
+          probe.remove();
+          return width;
+        }
+
+        function wrapWordsToWidth(value, maxWidth, className) {
+          const words = String(value).trim().split(/\s+/).filter(Boolean);
+          if (!words.length) return [];
+          const lines = [];
+          let line = "";
+          for (const word of words) {
+            const candidate = line ? `${line} ${word}` : word;
+            if (line && measureTextWidth(candidate, className) > maxWidth) {
+              lines.push(line);
+              line = word;
+            } else {
+              line = candidate;
+            }
+          }
+          if (line) lines.push(line);
+          return lines;
+        }
+
         function normalizeNodes(rawNodes) {
           return (rawNodes || []).map((raw, index) => {
-            const width = Number(raw.width) || 280;
-            const titleLines = wrapWords(raw.label || raw.id || "Untitled", Math.max(18, Math.floor(width / 11)));
-            const details = detailLines(raw.detail);
-            const height = Number(raw.height) || Math.max(124, 78 + titleLines.length * 28 + details.length * 23);
+            const label = raw.label || raw.id || "Untitled";
+            const category = categoryFor(raw.category || "default");
+            const sourceDetails = detailLines(raw.detail);
+            const minimumWidth = Math.max(220, Number(raw.minWidth) || Number(raw.width) || 280);
+            const maximumWidth = Math.max(
+              minimumWidth,
+              Number(raw.maxWidth) || minimumWidth + 120,
+            );
+            const naturalWidth = Math.max(
+              measureTextWidth(label, "node-title") + 64,
+              measureTextWidth(category.label, "node-category") + 64,
+              ...sourceDetails.map((line) => measureTextWidth(line, "node-detail") + 64),
+            );
+            const width = Math.min(maximumWidth, Math.max(minimumWidth, Math.ceil(naturalWidth)));
+            const contentWidth = Math.max(120, width - 64);
+            const titleLines = wrapWordsToWidth(label, contentWidth, "node-title");
+            const details = sourceDetails.flatMap((line) =>
+              wrapWordsToWidth(line, contentWidth, "node-detail"),
+            );
+            const minimumHeight = Math.max(124, Number(raw.minHeight) || Number(raw.height) || 0);
+            const height = Math.max(
+              minimumHeight,
+              88 + titleLines.length * 28 + details.length * 23,
+            );
             return {
               ...raw,
               id: String(raw.id || `node-${index + 1}`),
-              label: raw.label || raw.id || `Node ${index + 1}`,
+              label,
               category: raw.category || "default",
               status: raw.status || "known",
               order: Number.isFinite(Number(raw.order)) ? Number(raw.order) : index,
@@ -548,7 +597,10 @@
 
         function renderGraph(model, nodes) {
           const type = model.type || "map";
-          if (type === "map") layoutMap(nodes);
+          if (type === "map") {
+            layoutMap(nodes);
+            expandMapSpacing(nodes, model.edges || [], model);
+          }
           else layoutLayered(nodes, model.edges || [], model.direction || "lr");
 
           const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -570,6 +622,116 @@
             node._x = Number.isFinite(Number(node.x)) ? Number(node.x) : 90 + (index % columns) * 340;
             node._y = Number.isFinite(Number(node.y)) ? Number(node.y) : 150 + Math.floor(index / columns) * 210;
           });
+        }
+
+        function edgeLabelDimensions(edge) {
+          if (!edge.label) return { width: 0, height: 0 };
+          const maximumWidth = Number.isFinite(Number(edge.labelMaxWidth))
+            ? Math.max(80, Number(edge.labelMaxWidth))
+            : 220;
+          const lines = wrapWordsToWidth(edge.label, maximumWidth, "edge-label");
+          return {
+            width: Math.min(
+              maximumWidth + 16,
+              Math.max(...lines.map((line) => measureTextWidth(line, "edge-label"))) + 16,
+            ),
+            height: lines.length * 20 + 10,
+          };
+        }
+
+        function coordinateBands(nodes, axis) {
+          const coordinate = axis === "x" ? "_x" : "_y";
+          const sorted = [...nodes].sort((a, b) => a[coordinate] - b[coordinate]);
+          const bands = [];
+          for (const node of sorted) {
+            const band = bands.find((candidate) => Math.abs(candidate.anchor - node[coordinate]) <= 60);
+            if (band) {
+              band.nodes.push(node);
+            } else {
+              bands.push({ anchor: node[coordinate], nodes: [node] });
+            }
+          }
+          return bands.sort((a, b) => a.anchor - b.anchor);
+        }
+
+        function expandMapSpacing(nodes, edges, model) {
+          const nodeById = new Map(nodes.map((node) => [node.id, node]));
+          const columns = coordinateBands(nodes, "x");
+          const columnFor = new Map();
+          columns.forEach((column, index) => {
+            column.nodes.forEach((node) => columnFor.set(node.id, index));
+          });
+          const requiredColumnGaps = Array.from(
+            { length: Math.max(0, columns.length - 1) },
+            () => Math.max(72, Number(model.mapGapX) || 96),
+          );
+
+          for (const edge of edges) {
+            const from = nodeById.get(String(edge.from));
+            const to = nodeById.get(String(edge.to));
+            if (!from || !to) continue;
+            const fromColumn = columnFor.get(from.id);
+            const toColumn = columnFor.get(to.id);
+            if (Math.abs(fromColumn - toColumn) !== 1) continue;
+            const dx = Math.abs((to._x + to._width / 2) - (from._x + from._width / 2));
+            const dy = Math.abs((to._y + to._height / 2) - (from._y + from._height / 2));
+            if (dx < dy) continue;
+            const label = edgeLabelDimensions(edge);
+            const gap = Number.isFinite(Number(edge.labelGap)) ? Math.max(14, Number(edge.labelGap)) : 14;
+            const gapIndex = Math.min(fromColumn, toColumn);
+            requiredColumnGaps[gapIndex] = Math.max(
+              requiredColumnGaps[gapIndex],
+              Math.min(380, label.width + gap * 2 + 32),
+            );
+          }
+
+          let accumulatedShift = 0;
+          columns.forEach((column, index) => {
+            if (index === 0) return;
+            for (const node of column.nodes) node._x += accumulatedShift;
+            const previous = columns[index - 1];
+            const previousRight = Math.max(
+              ...previous.nodes.map((node) => node._x + node._width),
+            );
+            const currentLeft = Math.min(...column.nodes.map((node) => node._x));
+            const additionalShift = Math.max(
+              0,
+              requiredColumnGaps[index - 1] - (currentLeft - previousRight),
+            );
+            accumulatedShift += additionalShift;
+            for (const node of column.nodes) node._x += additionalShift;
+          });
+
+          const verticalEdges = edges
+            .map((edge) => ({
+              edge,
+              from: nodeById.get(String(edge.from)),
+              to: nodeById.get(String(edge.to)),
+            }))
+            .filter(({ from, to }) => from && to)
+            .sort((first, second) =>
+              Math.min(first.from._y, first.to._y) - Math.min(second.from._y, second.to._y),
+            );
+
+          for (const { edge, from, to } of verticalEdges) {
+            const dx = Math.abs((to._x + to._width / 2) - (from._x + from._width / 2));
+            const dy = Math.abs((to._y + to._height / 2) - (from._y + from._height / 2));
+            if (dy <= dx) continue;
+            const upper = from._y <= to._y ? from : to;
+            const lower = upper === from ? to : from;
+            const currentGap = lower._y - (upper._y + upper._height);
+            const label = edgeLabelDimensions(edge);
+            const gap = Number.isFinite(Number(edge.labelGap)) ? Math.max(14, Number(edge.labelGap)) : 14;
+            const requiredGap = Math.max(
+              Math.max(64, Number(model.mapGapY) || 80),
+              label.height + gap * 2 + 28,
+            );
+            const shift = Math.max(0, requiredGap - currentGap);
+            if (!shift) continue;
+            for (const node of nodes) {
+              if (node._y >= lower._y) node._y += shift;
+            }
+          }
         }
 
         function layoutLayered(nodes, edges, direction) {
@@ -793,18 +955,49 @@
             style: `stroke:${color}`,
           });
           scene.append(pathElement);
-          layoutState.edgePaths.push({
+          const edgeState = {
             element: pathElement,
             sourceId: from.id,
             targetId: to.id,
             validateArrow: true,
-          });
+            routeable: from.id !== to.id,
+            routePreference: ["direct", "top", "bottom", "left", "right"].includes(edge.route)
+              ? edge.route
+              : "auto",
+            from,
+            to,
+          };
+          layoutState.edgePaths.push(edgeState);
           if (edge.label) {
-            renderEdgeLabel(edge.label, labelX, labelY, labelPlacement, labelMaxWidth);
+            const labelPosition = Number.isFinite(Number(edge.labelPosition))
+              ? Math.min(0.9, Math.max(0.1, Number(edge.labelPosition)))
+              : 0.5;
+            const labelGap = Number.isFinite(Number(edge.labelGap))
+              ? Math.max(14, Number(edge.labelGap))
+              : 14;
+            renderEdgeLabel(
+              edge.label,
+              labelX,
+              labelY,
+              labelPlacement,
+              labelMaxWidth,
+              edgeState,
+              labelPosition,
+              labelGap,
+            );
           }
         }
 
-        function renderEdgeLabel(label, anchorX, anchorY, placement = "above", maxWidth = 220) {
+        function renderEdgeLabel(
+          label,
+          anchorX,
+          anchorY,
+          placement = "above",
+          maxWidth = 220,
+          edgeState = null,
+          preferredFraction = 0.5,
+          preferredGap = 14,
+        ) {
           const maxCharacters = Math.max(8, Math.floor(maxWidth / 8.5));
           const lines = wrapWords(label, maxCharacters);
           const lineHeight = 20;
@@ -834,17 +1027,47 @@
             background,
             anchorX,
             anchorY,
+            edgeState,
+            preferredFraction,
+            fraction: preferredFraction,
+            preferredGap,
+            gap: preferredGap,
             preferredPlacement: placement,
             placement,
             box: null,
           };
           layoutState.labels.push(labelState);
-          positionEdgeLabel(labelState, placement);
+          positionEdgeLabel(labelState, placement, preferredFraction, preferredGap);
         }
 
-        function positionEdgeLabel(labelState, placement) {
-          const { text, background, group, anchorX, anchorY } = labelState;
-          const textAnchor = placement === "above" || placement === "below"
+        function pointAndTangent(labelState, fraction) {
+          const path = labelState.edgeState?.element;
+          if (!path) {
+            return {
+              point: { x: labelState.anchorX, y: labelState.anchorY },
+              tangent: { x: 1, y: 0 },
+            };
+          }
+          const length = path.getTotalLength();
+          const distance = Math.max(0, Math.min(length, length * fraction));
+          const sample = Math.min(8, Math.max(2, length / 20));
+          const before = path.getPointAtLength(Math.max(0, distance - sample));
+          const after = path.getPointAtLength(Math.min(length, distance + sample));
+          const magnitude = Math.hypot(after.x - before.x, after.y - before.y) || 1;
+          return {
+            point: path.getPointAtLength(distance),
+            tangent: {
+              x: (after.x - before.x) / magnitude,
+              y: (after.y - before.y) / magnitude,
+            },
+          };
+        }
+
+        function positionEdgeLabel(labelState, placement, fraction = 0.5, gap = 14) {
+          const { text, background, group } = labelState;
+          const { point, tangent } = pointAndTangent(labelState, fraction);
+          const centered = placement === "normal-positive" || placement === "normal-negative";
+          const textAnchor = centered || placement === "above" || placement === "below"
             ? "middle"
             : placement === "left"
               ? "end"
@@ -853,7 +1076,6 @@
           const bounds = text.getBBox();
           const paddingX = 8;
           const paddingY = 5;
-          const gap = 14;
           const localBox = {
             x: bounds.x - paddingX,
             y: bounds.y - paddingY,
@@ -864,21 +1086,33 @@
             background.setAttribute(name, value);
           }
 
-          let translateX = anchorX;
-          let translateY = anchorY;
+          let translateX = point.x;
+          let translateY = point.y;
           if (placement === "above") {
-            translateY = anchorY - gap - localBox.y - localBox.height;
+            translateY = point.y - gap - localBox.y - localBox.height;
           } else if (placement === "below") {
-            translateY = anchorY + gap - localBox.y;
+            translateY = point.y + gap - localBox.y;
           } else if (placement === "left") {
-            translateX = anchorX - gap - localBox.x - localBox.width;
-            translateY = anchorY - localBox.y - localBox.height / 2;
+            translateX = point.x - gap - localBox.x - localBox.width;
+            translateY = point.y - localBox.y - localBox.height / 2;
+          } else if (placement === "right") {
+            translateX = point.x + gap - localBox.x;
+            translateY = point.y - localBox.y - localBox.height / 2;
           } else {
-            translateX = anchorX + gap - localBox.x;
-            translateY = anchorY - localBox.y - localBox.height / 2;
+            const direction = placement === "normal-positive" ? 1 : -1;
+            const normal = { x: -tangent.y * direction, y: tangent.x * direction };
+            const projectedHalfExtent = (
+              Math.abs(normal.x) * localBox.width + Math.abs(normal.y) * localBox.height
+            ) / 2;
+            const centerX = point.x + normal.x * (gap + projectedHalfExtent);
+            const centerY = point.y + normal.y * (gap + projectedHalfExtent);
+            translateX = centerX - localBox.x - localBox.width / 2;
+            translateY = centerY - localBox.y - localBox.height / 2;
           }
           group.setAttribute("transform", `translate(${translateX} ${translateY})`);
           labelState.placement = placement;
+          labelState.fraction = fraction;
+          labelState.gap = gap;
           labelState.box = {
             x: localBox.x + translateX,
             y: localBox.y + translateY,
@@ -1054,6 +1288,8 @@
           Promise.resolve(fontsReady)
             .then(() => new Promise((resolve) => requestAnimationFrame(resolve)))
             .then(() => {
+              render(data);
+              resolveConnectorCollisions();
               resolveLabelCollisions();
               const report = validateLayout();
               globalThis.visualizeLayoutReport = report;
@@ -1061,7 +1297,8 @@
               layoutStatus.hidden = report.valid;
               layoutStatus.textContent = report.valid
                 ? ""
-                : `Layout needs attention: ${report.issues.length} geometry issue${report.issues.length === 1 ? "" : "s"}.`;
+                : `Layout unfinished — ${report.issues.length} geometry issue${report.issues.length === 1 ? "" : "s"}. ${report.issues[0]}`;
+              layoutStatus.title = report.issues.join("\n");
               if (!report.valid) console.warn("Visualize layout audit", report.issues);
               fitView();
             })
@@ -1074,12 +1311,93 @@
 
         function placementOrder(preferred) {
           const alternatives = {
-            above: ["above", "below", "right", "left"],
-            below: ["below", "above", "right", "left"],
-            right: ["right", "left", "above", "below"],
-            left: ["left", "right", "above", "below"],
+            above: ["above", "normal-negative", "normal-positive", "below", "right", "left"],
+            below: ["below", "normal-positive", "normal-negative", "above", "right", "left"],
+            right: ["right", "normal-positive", "normal-negative", "left", "above", "below"],
+            left: ["left", "normal-negative", "normal-positive", "right", "above", "below"],
           };
           return alternatives[preferred] || alternatives.above;
+        }
+
+        function uniqueNumbers(values) {
+          return [...new Set(values.map((value) => Number(value).toFixed(3)))].map(Number);
+        }
+
+        function resolveConnectorCollisions() {
+          const boxes = layoutState.nodeBoxes;
+          if (!boxes.length) return;
+          const minX = Math.min(...boxes.map((box) => box.x));
+          const minY = Math.min(...boxes.map((box) => box.y));
+          const maxX = Math.max(...boxes.map((box) => box.x + box.width));
+          const maxY = Math.max(...boxes.map((box) => box.y + box.height));
+          const outside = {
+            top: minY - 72,
+            bottom: maxY + 72,
+            left: minX - 72,
+            right: maxX + 72,
+          };
+
+          for (const edge of layoutState.edgePaths) {
+            if (!edge.routeable || !edge.from || !edge.to) continue;
+            const start = edge.element.getPointAtLength(0);
+            const length = edge.element.getTotalLength();
+            const end = edge.element.getPointAtLength(length);
+            const sourceCenter = {
+              x: edge.from._x + edge.from._width / 2,
+              y: edge.from._y + edge.from._height / 2,
+            };
+            const targetCenter = {
+              x: edge.to._x + edge.to._width / 2,
+              y: edge.to._y + edge.to._height / 2,
+            };
+            const sourceMagnitude = Math.hypot(start.x - sourceCenter.x, start.y - sourceCenter.y) || 1;
+            const targetMagnitude = Math.hypot(end.x - targetCenter.x, end.y - targetCenter.y) || 1;
+            const departure = {
+              x: start.x + (start.x - sourceCenter.x) / sourceMagnitude * 28,
+              y: start.y + (start.y - sourceCenter.y) / sourceMagnitude * 28,
+            };
+            const approach = {
+              x: end.x + (end.x - targetCenter.x) / targetMagnitude * 28,
+              y: end.y + (end.y - targetCenter.y) / targetMagnitude * 28,
+            };
+            const midpoint = {
+              x: (departure.x + approach.x) / 2,
+              y: (departure.y + approach.y) / 2,
+            };
+            const routes = {
+              direct: edge.element.getAttribute("d"),
+              horizontal: `M ${start.x} ${start.y} L ${departure.x} ${departure.y} L ${midpoint.x} ${departure.y} L ${midpoint.x} ${approach.y} L ${approach.x} ${approach.y} L ${end.x} ${end.y}`,
+              vertical: `M ${start.x} ${start.y} L ${departure.x} ${departure.y} L ${departure.x} ${midpoint.y} L ${approach.x} ${midpoint.y} L ${approach.x} ${approach.y} L ${end.x} ${end.y}`,
+              top: `M ${start.x} ${start.y} L ${departure.x} ${departure.y} L ${departure.x} ${outside.top} L ${approach.x} ${outside.top} L ${approach.x} ${approach.y} L ${end.x} ${end.y}`,
+              bottom: `M ${start.x} ${start.y} L ${departure.x} ${departure.y} L ${departure.x} ${outside.bottom} L ${approach.x} ${outside.bottom} L ${approach.x} ${approach.y} L ${end.x} ${end.y}`,
+              left: `M ${start.x} ${start.y} L ${departure.x} ${departure.y} L ${outside.left} ${departure.y} L ${outside.left} ${approach.y} L ${approach.x} ${approach.y} L ${end.x} ${end.y}`,
+              right: `M ${start.x} ${start.y} L ${departure.x} ${departure.y} L ${outside.right} ${departure.y} L ${outside.right} ${approach.y} L ${approach.x} ${approach.y} L ${end.x} ${end.y}`,
+            };
+            const routeNames = edge.routePreference === "auto"
+              ? ["direct", "horizontal", "vertical", "top", "bottom", "left", "right"]
+              : [edge.routePreference];
+            let best = null;
+            for (const routeName of routeNames) {
+              edge.element.setAttribute("d", routes[routeName]);
+              const collisions = connectorNodeCollisions(edge);
+              const score = collisions * 1000000 + edge.element.getTotalLength();
+              if (!best || score < best.score) {
+                best = { pathData: routes[routeName], routeName, score, collisions };
+              }
+              if (collisions === 0 && routeName === edge.routePreference) break;
+            }
+            edge.element.setAttribute("d", best.pathData);
+            edge.resolvedRoute = best.routeName;
+          }
+        }
+
+        function connectorNodeCollisions(edge) {
+          let collisions = 0;
+          for (const node of layoutState.nodeBoxes) {
+            if (node.id === edge.sourceId || node.id === edge.targetId) continue;
+            if (pathIntersectsBox(edge.element, node, 1, 12)) collisions += 1;
+          }
+          return collisions;
         }
 
         function resolveLabelCollisions() {
@@ -1087,13 +1405,35 @@
           const labels = [...layoutState.labels].sort((a, b) => b.label.length - a.label.length);
           for (const labelState of labels) {
             let best = null;
-            for (const placement of placementOrder(labelState.preferredPlacement)) {
-              positionEdgeLabel(labelState, placement);
-              const score = labelCollisionScore(labelState.box, placed);
-              if (!best || score < best.score) best = { placement, score };
-              if (score === 0) break;
+            const fractions = uniqueNumbers([
+              labelState.preferredFraction,
+              0.5,
+              0.36,
+              0.64,
+              0.22,
+              0.78,
+            ]);
+            const gaps = uniqueNumbers([
+              labelState.preferredGap,
+              14,
+              28,
+              44,
+              64,
+            ]);
+            search:
+            for (const fraction of fractions) {
+              for (const placement of placementOrder(labelState.preferredPlacement)) {
+                for (const gap of gaps) {
+                  positionEdgeLabel(labelState, placement, fraction, gap);
+                  const score = labelCollisionScore(labelState.box, placed);
+                  if (!best || score < best.score) {
+                    best = { placement, fraction, gap, score };
+                  }
+                  if (score === 0) break search;
+                }
+              }
             }
-            positionEdgeLabel(labelState, best.placement);
+            positionEdgeLabel(labelState, best.placement, best.fraction, best.gap);
             placed.push(labelState.box);
           }
         }
@@ -1148,7 +1488,21 @@
             }
           }
 
-          return { valid: issues.length === 0, issues };
+          return {
+            valid: issues.length === 0,
+            issues,
+            labels: layoutState.labels.map((labelState) => ({
+              label: labelState.label,
+              placement: labelState.placement,
+              position: labelState.fraction,
+              gap: labelState.gap,
+            })),
+            connectors: layoutState.edgePaths.map((edge) => ({
+              from: edge.sourceId,
+              to: edge.targetId,
+              route: edge.resolvedRoute || "direct",
+            })),
+          };
         }
 
         function boxesOverlap(first, second, margin = 0) {
