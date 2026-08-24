@@ -43,8 +43,12 @@ Aim for 5–12 primary elements in a view. Group larger subjects into named boun
 
 Remove decorative elements and prose that do not improve comprehension. Include a visible legend for semantic categories that are not self-explanatory.
 
+Treat layout safety as an invariant: connector labels must remain separate from paths and nodes, unrelated connectors must not cross cards, cycle or backward edges must use outside routing channels, and arrowheads must enter their target in the direction of travel. Use ARIA labels and descriptions for accessibility; do not add SVG `<title>` elements because browsers expose them as hover tooltips over the diagram.
+
 ## Verify and deliver
 
-Open the artifact in an available browser and inspect the initial fit, hierarchy, label legibility, connector direction, grouping, and viewport resizing. Exercise panning, pointer-centered zoom, controls, and keyboard navigation. Check that the diagram answers the user's question without requiring a separate prose explanation.
+Open the artifact in an available browser and wait for `#diagram[data-layout-valid]` to become `true` or `false`. A `false` result is blocking: inspect `globalThis.visualizeLayoutReport.issues`, revise the diagram data or label placement, and recheck before delivery. Do not hide, disable, or bypass the audit warning.
 
-If browser control is unavailable, validate the HTML and JSON source and disclose that the rendered layout was not visually verified. Return a link or path to the artifact and one short sentence explaining what the visual emphasizes and how to navigate it.
+After the audit passes, inspect the initial fit, hierarchy, label legibility, connector direction, grouping, and viewport resizing. Exercise panning, pointer-centered zoom, controls, and keyboard navigation. Check that the diagram answers the user's question without requiring a separate prose explanation.
+
+If browser control is unavailable, validate the HTML and JSON source, preserve the embedded runtime audit, and disclose that the rendered layout and audit result were not observed. Return a link or path to the artifact and one short sentence explaining what the visual emphasizes and how to navigate it.

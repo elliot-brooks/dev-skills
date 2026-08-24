@@ -105,15 +105,28 @@ Edit only the JSON inside the template's `diagram-data` element when its existin
 - `dashed`: optional boolean; `return` edges are dashed automatically.
 - `color`: optional explicit stroke color.
 - `bidirectional`: optional boolean for relationships that genuinely operate both ways.
+- `labelPlacement`: optional `above`, `below`, `left`, or `right` preference. The renderer may choose another side to avoid a collision.
+- `labelMaxWidth`: optional numeric wrapping width for unusually long relationship wording.
 
 ## Composition rules
 
 - Architecture: draw system boundaries before internal components; place external actors outside them.
 - Call hierarchy: make the entry point the root; label asynchronous calls, callbacks, recursion, and skipped layers explicitly.
 - Execution flow: keep the happy path visually dominant and branch failures or retries away from it.
+- Connector labels: keep relationship wording concise and place it in a callout beside the path, never directly on the stroke.
 - Sequence: use one message per edge in time order; distinguish calls from returns with line style and wording.
 - Problem framing: place the problem or decision at the center, causes and evidence to the left, effects to the right, and constraints or unknowns below.
 - Dependency graph: orient edges consistently as either “depends on” or “is used by”; state the chosen reading direction.
 - Timeline: keep a single time direction and attach consequences or decisions to the event that caused them.
 
 When a diagram grows beyond roughly twelve primary nodes, collapse detail into boundaries, make a second focused region, or split the artifact. Do not solve density by shrinking text until it is difficult to read.
+
+## Runtime layout audit
+
+The template waits for browser fonts, measures the rendered geometry, and tries alternate label positions before fitting the canvas. It then checks label-to-node, label-to-label, label-to-path, connector-to-node, and arrow-direction invariants.
+
+- `#diagram[data-layout-valid="true"]` means the automated geometry audit passed.
+- `#diagram[data-layout-valid="false"]` displays a visible warning and blocks delivery.
+- `globalThis.visualizeLayoutReport.issues` contains the remaining failures to resolve.
+
+Keep the audit enabled. It complements browser inspection and is especially important when labels, fonts, or free-form coordinates change.

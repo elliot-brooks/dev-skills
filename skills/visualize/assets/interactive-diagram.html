@@ -276,6 +276,20 @@
         transform: translate(-50%, -50%);
       }
 
+      #layout-status {
+        top: 18px;
+        right: 18px;
+        max-width: min(420px, calc(100% - 36px));
+        padding: 10px 13px;
+        color: #ffd28a;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      #layout-status[hidden] {
+        display: none;
+      }
+
       @media (max-width: 720px) {
         .help {
           display: none;
@@ -289,8 +303,12 @@
       tabindex="0"
       aria-label="Interactive visual explanation. Drag to pan and use the mouse wheel or controls to zoom."
     >
-      <svg id="diagram" role="img" aria-labelledby="diagram-title diagram-description">
-        <title id="diagram-title">Example visual explanation</title>
+      <svg
+        id="diagram"
+        role="img"
+        aria-label="Interactive visual explanation"
+        aria-describedby="diagram-description"
+      >
         <desc id="diagram-description">
           An interactive diagram generated from the embedded diagram data.
         </desc>
@@ -334,6 +352,7 @@
       <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
     </nav>
     <div id="error-panel" class="overlay" role="alert"></div>
+    <output id="layout-status" class="overlay" aria-live="polite" hidden></output>
 
     <!-- Replace this JSON with the subject being visualized. Keep identifiers unique. -->
     <script id="diagram-data" type="application/json">
@@ -394,13 +413,16 @@
 
         const SVG_NS = "http://www.w3.org/2000/svg";
         const viewport = document.getElementById("viewport");
+        const diagram = document.getElementById("diagram");
         const scene = document.getElementById("scene");
         const legend = document.getElementById("legend");
         const zoomStatus = document.getElementById("zoom-status");
         const errorPanel = document.getElementById("error-panel");
+        const layoutStatus = document.getElementById("layout-status");
         const minScale = 0.22;
         const maxScale = 3;
         const view = { x: 0, y: 0, scale: 1 };
+        const layoutState = { nodeBoxes: [], edgePaths: [], labels: [] };
         let drag = null;
 
         const fallbackCategories = {
@@ -417,7 +439,7 @@
         try {
           data = JSON.parse(document.getElementById("diagram-data").textContent);
           render(data);
-          requestAnimationFrame(fitView);
+          finalizeLayout();
         } catch (error) {
           errorPanel.style.display = "block";
           errorPanel.textContent = `The embedded diagram data could not be rendered: ${error.message}`;
@@ -489,7 +511,12 @@
         function render(model) {
           if (!model.title) throw new Error("diagram-data requires a title");
           document.title = model.title;
-          document.getElementById("diagram-title").textContent = model.title;
+          diagram.setAttribute("aria-label", model.title);
+          diagram.setAttribute("data-layout-valid", "pending");
+          layoutStatus.hidden = true;
+          layoutState.nodeBoxes.length = 0;
+          layoutState.edgePaths.length = 0;
+          layoutState.labels.length = 0;
           document.getElementById("diagram-description").textContent =
             model.description || model.subtitle || `Interactive ${model.type || "map"} diagram: ${model.title}`;
           viewport.setAttribute(
@@ -613,7 +640,7 @@
               y += rowHeight + rowGap;
             }
           } else {
-            const columnGap = 130;
+            const columnGap = 150;
             const rowGap = 54;
             const tallest = Math.max(
               1,
@@ -686,34 +713,42 @@
           let pathData;
           let labelX;
           let labelY;
-          let labelAnchor = "middle";
+          let labelPlacement = "above";
+          let labelMaxWidth = 220;
 
           if (from.id === to.id) {
             const x = from._x + from._width;
             const y = from._y + from._height / 2;
             pathData = `M ${x} ${y} C ${x + 85} ${y - 65}, ${x + 85} ${y + 65}, ${x} ${y + 20}`;
-            labelX = x + 100;
-            labelY = y + 5;
-            labelAnchor = "start";
+            labelX = x + 85;
+            labelY = y;
+            labelPlacement = "right";
+            labelMaxWidth = 180;
           } else if (type !== "map" && direction === "tb" && from._y > to._y) {
             const startX = from._x + from._width;
             const startY = from._y + from._height / 2;
             const endX = to._x + to._width;
             const endY = to._y + to._height / 2;
             const outerX = Math.max(startX, endX) + 140;
-            pathData = `M ${startX} ${startY} C ${outerX} ${startY}, ${outerX} ${endY}, ${endX} ${endY}`;
-            labelX = outerX + 18;
-            labelY = (startY + endY) / 2 + 5;
-            labelAnchor = "start";
+            const bend = 60;
+            pathData = `M ${startX} ${startY} C ${outerX} ${startY}, ${outerX} ${startY}, ${outerX} ${startY - bend} L ${outerX} ${endY + bend} C ${outerX} ${endY}, ${outerX} ${endY}, ${endX} ${endY}`;
+            labelX = outerX;
+            labelY = (startY + endY) / 2;
+            labelPlacement = "right";
+            labelMaxWidth = 220;
           } else if (type !== "map" && direction !== "tb" && from._x > to._x) {
             const startX = from._x + from._width / 2;
             const startY = from._y + from._height;
-            const endX = to._x + to._width / 2;
-            const endY = to._y + to._height;
+            const endX = to._x;
+            const endY = to._y + to._height / 2;
             const outerY = Math.max(startY, endY) + 120;
-            pathData = `M ${startX} ${startY} C ${startX} ${outerY}, ${endX} ${outerY}, ${endX} ${endY}`;
-            labelX = (startX + endX) / 2;
-            labelY = outerY + 28;
+            const outerX = Math.min(startX, endX) - 100;
+            const bend = 50;
+            pathData = `M ${startX} ${startY} C ${startX} ${outerY}, ${startX} ${outerY}, ${startX - bend} ${outerY} L ${outerX + bend} ${outerY} C ${outerX} ${outerY}, ${outerX} ${outerY}, ${outerX} ${outerY - bend} L ${outerX} ${endY + bend} C ${outerX} ${endY}, ${outerX} ${endY}, ${endX} ${endY}`;
+            labelX = (startX + outerX) / 2;
+            labelY = outerY;
+            labelPlacement = "below";
+            labelMaxWidth = 240;
           } else {
             const points = connectionPoints(from, to, direction, type);
             const dx = points.to.x - points.from.x;
@@ -729,40 +764,127 @@
             }
             if (points.horizontal) {
               labelX = (points.from.x + points.to.x) / 2;
-              labelY = (points.from.y + points.to.y) / 2 - 14;
+              labelY = (points.from.y + points.to.y) / 2;
+              labelPlacement = "above";
+              labelMaxWidth = Math.max(
+                96,
+                Math.min(220, Math.abs(points.to.x - points.from.x) - 24),
+              );
             } else {
-              labelX = (points.from.x + points.to.x) / 2 + 18;
-              labelY = (points.from.y + points.to.y) / 2 + 5;
-              labelAnchor = "start";
+              labelX = (points.from.x + points.to.x) / 2;
+              labelY = (points.from.y + points.to.y) / 2;
+              labelPlacement = "right";
+              labelMaxWidth = 180;
             }
           }
 
           const classes = ["edge"];
           if (edge.dashed || edge.kind === "return" || edge.kind === "inferred") classes.push("dashed");
           if (edge.bidirectional) classes.push("bidirectional");
-          scene.append(createSvg("path", { class: classes.join(" "), d: pathData, style: `stroke:${color}` }));
+          if (["above", "below", "left", "right"].includes(edge.labelPlacement)) {
+            labelPlacement = edge.labelPlacement;
+          }
+          if (Number.isFinite(Number(edge.labelMaxWidth))) {
+            labelMaxWidth = Math.max(80, Number(edge.labelMaxWidth));
+          }
+          const pathElement = createSvg("path", {
+            class: classes.join(" "),
+            d: pathData,
+            style: `stroke:${color}`,
+          });
+          scene.append(pathElement);
+          layoutState.edgePaths.push({
+            element: pathElement,
+            sourceId: from.id,
+            targetId: to.id,
+            validateArrow: true,
+          });
           if (edge.label) {
-            renderEdgeLabel(edge.label, labelX, labelY, labelAnchor);
+            renderEdgeLabel(edge.label, labelX, labelY, labelPlacement, labelMaxWidth);
           }
         }
 
-        function renderEdgeLabel(label, x, y, anchor = "middle") {
+        function renderEdgeLabel(label, anchorX, anchorY, placement = "above", maxWidth = 220) {
+          const maxCharacters = Math.max(8, Math.floor(maxWidth / 8.5));
+          const lines = wrapWords(label, maxCharacters);
+          const lineHeight = 20;
           const group = createSvg("g", { "aria-label": label });
-          const text = createSvg("text", { class: "edge-label", x, y, "text-anchor": anchor }, label);
+          const text = createSvg("text", {
+            class: "edge-label",
+            x: 0,
+            y: 0,
+          });
+          lines.forEach((line, index) => {
+            text.append(
+              createSvg(
+                "tspan",
+                { x: 0, dy: index === 0 ? 0 : lineHeight },
+                line,
+              ),
+            );
+          });
           group.append(text);
           scene.append(group);
-          const bounds = text.getBBox();
-          group.insertBefore(
-            createSvg("rect", {
-              class: "edge-label-bg",
-              x: bounds.x - 8,
-              y: bounds.y - 5,
-              width: bounds.width + 16,
-              height: bounds.height + 10,
-              rx: 8,
-            }),
+          const background = createSvg("rect", { class: "edge-label-bg", rx: 8 });
+          group.insertBefore(background, text);
+          const labelState = {
+            label,
+            group,
             text,
-          );
+            background,
+            anchorX,
+            anchorY,
+            preferredPlacement: placement,
+            placement,
+            box: null,
+          };
+          layoutState.labels.push(labelState);
+          positionEdgeLabel(labelState, placement);
+        }
+
+        function positionEdgeLabel(labelState, placement) {
+          const { text, background, group, anchorX, anchorY } = labelState;
+          const textAnchor = placement === "above" || placement === "below"
+            ? "middle"
+            : placement === "left"
+              ? "end"
+              : "start";
+          text.setAttribute("text-anchor", textAnchor);
+          const bounds = text.getBBox();
+          const paddingX = 8;
+          const paddingY = 5;
+          const gap = 14;
+          const localBox = {
+            x: bounds.x - paddingX,
+            y: bounds.y - paddingY,
+            width: bounds.width + paddingX * 2,
+            height: bounds.height + paddingY * 2,
+          };
+          for (const [name, value] of Object.entries(localBox)) {
+            background.setAttribute(name, value);
+          }
+
+          let translateX = anchorX;
+          let translateY = anchorY;
+          if (placement === "above") {
+            translateY = anchorY - gap - localBox.y - localBox.height;
+          } else if (placement === "below") {
+            translateY = anchorY + gap - localBox.y;
+          } else if (placement === "left") {
+            translateX = anchorX - gap - localBox.x - localBox.width;
+            translateY = anchorY - localBox.y - localBox.height / 2;
+          } else {
+            translateX = anchorX + gap - localBox.x;
+            translateY = anchorY - localBox.y - localBox.height / 2;
+          }
+          group.setAttribute("transform", `translate(${translateX} ${translateY})`);
+          labelState.placement = placement;
+          labelState.box = {
+            x: localBox.x + translateX,
+            y: localBox.y + translateY,
+            width: localBox.width,
+            height: localBox.height,
+          };
         }
 
         function statusDash(status) {
@@ -781,7 +903,6 @@
             role: "group",
             "aria-label": `${node.label}. ${node._detailLines.join(" ")}`,
           });
-          group.append(createSvg("title", {}, `${node.label}. ${node._detailLines.join(" ")}`));
           group.append(
             createSvg("rect", {
               class: "node-card",
@@ -822,6 +943,13 @@
             y += 23;
           }
           scene.append(group);
+          layoutState.nodeBoxes.push({
+            id: node.id,
+            x: node._x,
+            y: node._y,
+            width: node._width,
+            height: node._height,
+          });
         }
 
         function renderAnnotations(annotations) {
@@ -889,18 +1017,191 @@
               pathData = `M ${from._centerX} ${y} L ${to._centerX - sign * 7} ${y}`;
               labelX = (from._centerX + to._centerX) / 2;
             }
+            const pathElement = createSvg("path", {
+              class: classes.join(" "),
+              d: pathData,
+              style: `stroke:${color}`,
+            });
             scene.append(
-              createSvg("path", { class: classes.join(" "), d: pathData, style: `stroke:${color}` }),
+              pathElement,
               createSvg("circle", { class: "step-badge", cx: from._centerX, cy: y, r: 13 }),
               createSvg("text", { class: "step-number", x: from._centerX, y }, index + 1),
             );
+            layoutState.edgePaths.push({
+              element: pathElement,
+              sourceId: from.id,
+              targetId: to.id,
+              validateArrow: false,
+              skipNodeValidation: true,
+            });
             if (edge.label) {
-              renderEdgeLabel(edge.label, labelX, y - 14);
+              const placement = ["above", "below", "left", "right"].includes(edge.labelPlacement)
+                ? edge.labelPlacement
+                : "above";
+              const maxWidth = Number.isFinite(Number(edge.labelMaxWidth))
+                ? Math.max(80, Number(edge.labelMaxWidth))
+                : 200;
+              renderEdgeLabel(edge.label, labelX, y, placement, maxWidth);
             }
           });
 
           for (const participant of participants) renderNode(participant);
           renderAnnotations(model.annotations || []);
+        }
+
+        function finalizeLayout() {
+          const fontsReady = document.fonts?.ready || Promise.resolve();
+          Promise.resolve(fontsReady)
+            .then(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+            .then(() => {
+              resolveLabelCollisions();
+              const report = validateLayout();
+              globalThis.visualizeLayoutReport = report;
+              diagram.setAttribute("data-layout-valid", String(report.valid));
+              layoutStatus.hidden = report.valid;
+              layoutStatus.textContent = report.valid
+                ? ""
+                : `Layout needs attention: ${report.issues.length} geometry issue${report.issues.length === 1 ? "" : "s"}.`;
+              if (!report.valid) console.warn("Visualize layout audit", report.issues);
+              fitView();
+            })
+            .catch((error) => {
+              diagram.setAttribute("data-layout-valid", "false");
+              errorPanel.style.display = "block";
+              errorPanel.textContent = `The diagram layout could not be validated: ${error.message}`;
+            });
+        }
+
+        function placementOrder(preferred) {
+          const alternatives = {
+            above: ["above", "below", "right", "left"],
+            below: ["below", "above", "right", "left"],
+            right: ["right", "left", "above", "below"],
+            left: ["left", "right", "above", "below"],
+          };
+          return alternatives[preferred] || alternatives.above;
+        }
+
+        function resolveLabelCollisions() {
+          const placed = [];
+          const labels = [...layoutState.labels].sort((a, b) => b.label.length - a.label.length);
+          for (const labelState of labels) {
+            let best = null;
+            for (const placement of placementOrder(labelState.preferredPlacement)) {
+              positionEdgeLabel(labelState, placement);
+              const score = labelCollisionScore(labelState.box, placed);
+              if (!best || score < best.score) best = { placement, score };
+              if (score === 0) break;
+            }
+            positionEdgeLabel(labelState, best.placement);
+            placed.push(labelState.box);
+          }
+        }
+
+        function labelCollisionScore(box, placedLabelBoxes) {
+          let score = 0;
+          for (const node of layoutState.nodeBoxes) {
+            if (boxesOverlap(box, node, 8)) score += 100000 + overlapArea(box, node);
+          }
+          for (const placed of placedLabelBoxes) {
+            if (boxesOverlap(box, placed, 6)) score += 100000 + overlapArea(box, placed);
+          }
+          for (const edge of layoutState.edgePaths) {
+            if (pathIntersectsBox(edge.element, box, 4)) score += 100000;
+          }
+          return score;
+        }
+
+        function validateLayout() {
+          const issues = [];
+          layoutState.labels.forEach((labelState, labelIndex) => {
+            for (const node of layoutState.nodeBoxes) {
+              if (boxesOverlap(labelState.box, node, 6)) {
+                issues.push(`Label "${labelState.label}" overlaps node "${node.id}".`);
+              }
+            }
+            for (let otherIndex = labelIndex + 1; otherIndex < layoutState.labels.length; otherIndex += 1) {
+              const other = layoutState.labels[otherIndex];
+              if (boxesOverlap(labelState.box, other.box, 4)) {
+                issues.push(`Labels "${labelState.label}" and "${other.label}" overlap.`);
+              }
+            }
+            for (const edge of layoutState.edgePaths) {
+              if (pathIntersectsBox(edge.element, labelState.box, 3)) {
+                issues.push(`A connector crosses label "${labelState.label}".`);
+                break;
+              }
+            }
+          });
+
+          for (const edge of layoutState.edgePaths) {
+            if (!edge.skipNodeValidation) {
+              for (const node of layoutState.nodeBoxes) {
+                if (node.id === edge.sourceId || node.id === edge.targetId) continue;
+                if (pathIntersectsBox(edge.element, node, 1, 12)) {
+                  issues.push(`Connector ${edge.sourceId} → ${edge.targetId} crosses node "${node.id}".`);
+                }
+              }
+            }
+            if (edge.validateArrow && !arrowPointsTowardTarget(edge)) {
+              issues.push(`Arrow ${edge.sourceId} → ${edge.targetId} does not point into its target.`);
+            }
+          }
+
+          return { valid: issues.length === 0, issues };
+        }
+
+        function boxesOverlap(first, second, margin = 0) {
+          return first.x < second.x + second.width + margin
+            && first.x + first.width > second.x - margin
+            && first.y < second.y + second.height + margin
+            && first.y + first.height > second.y - margin;
+        }
+
+        function overlapArea(first, second) {
+          const width = Math.max(
+            0,
+            Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x),
+          );
+          const height = Math.max(
+            0,
+            Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y),
+          );
+          return width * height;
+        }
+
+        function pointInsideBox(point, box, margin = 0) {
+          return point.x >= box.x - margin
+            && point.x <= box.x + box.width + margin
+            && point.y >= box.y - margin
+            && point.y <= box.y + box.height + margin;
+        }
+
+        function pathIntersectsBox(path, box, margin = 0, endExclusion = 0) {
+          const length = path.getTotalLength();
+          const start = Math.min(endExclusion, length / 3);
+          const end = Math.max(start, length - start);
+          const step = Math.max(6, length / 180);
+          for (let distance = start; distance <= end; distance += step) {
+            if (pointInsideBox(path.getPointAtLength(distance), box, margin)) return true;
+          }
+          return pointInsideBox(path.getPointAtLength(end), box, margin);
+        }
+
+        function arrowPointsTowardTarget(edge) {
+          const target = layoutState.nodeBoxes.find((node) => node.id === edge.targetId);
+          if (!target) return true;
+          const length = edge.element.getTotalLength();
+          if (length < 2) return false;
+          const end = edge.element.getPointAtLength(length);
+          const before = edge.element.getPointAtLength(Math.max(0, length - 12));
+          const direction = { x: end.x - before.x, y: end.y - before.y };
+          const targetCenter = {
+            x: target.x + target.width / 2,
+            y: target.y + target.height / 2,
+          };
+          const inward = { x: targetCenter.x - end.x, y: targetCenter.y - end.y };
+          return direction.x * inward.x + direction.y * inward.y > 0;
         }
 
         function renderLegend(model, nodes) {
