@@ -40,3 +40,4 @@ Analyse the PR in the context of the surrounding codebase and explain:
 - Keep explanations concise and proportional to the complexity of the PR.
 - Do not perform a conventional bug-finding review unless requested.
 - Use clear and simple language
+- Where appropriate, reference filenames and line numbers in the format `filename:line_number`.
