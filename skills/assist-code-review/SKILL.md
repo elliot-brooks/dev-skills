@@ -1,43 +1,40 @@
 ---
 name: assist-code-review
-description: Help build a mental model of a code change to aid in reviewing it.
+description: Review code changes, presenting their intent and impact in a clear way.
 ---
 
 # PR Understanding
 
-Help the developer understand a pull request so they can review it
+Help the developer understand a change so they can review it
 effectively. Prioritise comprehension over evaluating code quality.
 
 ## Instructions
 
-Analyse the PR in the context of the surrounding codebase and explain:
+Perform a formal code review of the specified change, then generate a structured summary of your review.
 
-1. **Intent**
-   - What problem does this PR solve?
-   - How does behaviour change?
+### Structured Summary
 
-2. **Architecture**
-   - Which components are affected?
-   - How do they interact with the existing system?
+1. **Summary**
+   - A high-level summary of the change in a few sentences.
 
-3. **Implementation**
-   - Walk through the changes in a logical order, not file-by-file.
+2. **Changes**
+   - Summarise the main modifications and additions, and why they work in context.
+
+3. **Implications**
+   - What existing behaviour could be affected?
+
+4. **Review-map**
+   - Highlight the key call sites and interactions in logical order
    - Explain important design decisions and execution flows.
 
-4. **Implications**
-   - What existing behaviour could be affected?
-   - What assumptions, trade-offs, or edge cases matter?
-
-5. **Review guidance**
-   - Where should the developer focus their attention?
-   - What questions should they be able to answer?
+5. **Comments**
+   - Bullet key observations, suggestions and bugs grouped by priority
+   - Use [Conventional Comments](https://conventionalcomments.org/) style
 
 ## Guidelines
 
-- Ground explanations in the code, referencing relevant files.
+- Use ASD-STE100 language throughout
+- When referencing files, format them as `filename:method():line`
+- Ground explanations in the code
 - Distinguish observed behaviour from inferred intent.
-- Avoid simply paraphrasing the diff.
 - Keep explanations concise and proportional to the complexity of the PR.
-- Do not perform a conventional bug-finding review unless requested.
-- Use clear and simple language
-- Where appropriate, reference filenames and line numbers in the format `filename:line_number`.
